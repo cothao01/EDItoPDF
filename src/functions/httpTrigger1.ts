@@ -10,11 +10,9 @@ export async function httpTrigger1(request: HttpRequest, context: InvocationCont
    
 	context.log("Request: ", request);
 
-	const parsedEDIText = generateDocumentFromEDI(attachments);
+	const parsedEDIText = generateDocumentFromEDI(atob(atob(attachments)));
 
-	console.log("TESTING123");
-
-	context.log("EDI: ", parsedEDIText);
+	context.log("EDI TEXT TESTING: ", parsedEDIText);
 
     	const name = request.query.get('name') || await request.text() || 'world';
 

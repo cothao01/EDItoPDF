@@ -425,12 +425,24 @@ function determinePDFLayoutByOrderType(orderType)
 
 function generateDocumentFromEDI(base64String)
 {
-	const numberOfSegments = base64String.split('\r\n').length;
-	const cleanedSegments = [];
+	let numberOfSegments = base64String.split('\n\n').length;
+	let splitByExpression = '\n\n';
 
+	if (numberOfSegments <= 3)
+	{
+		numberOfSegments = base64String.split('\r\n').length;
+		splitByExpression = '\r\n';
+	}
+	
+	if (numberOfSegments <= 3)
+	{
+		numberOfSegments = base64String.split('\n').length;
+		splitByExpression = '\n';
+	}
+	
 	if (numberOfSegments > 3)
 	{
-		const ediSegments = base64String.split('\r\n');
+		const ediSegments = base64String.split(splitByExpression);
 		const orderInfo = {} as Order;
 		convertedEDISegments = parseEDI(ediSegments);	
 		const ot = determinePDFLayoutByOrderType(findSegment(convertedEDISegments, "ST")[0]["ST01"]);
