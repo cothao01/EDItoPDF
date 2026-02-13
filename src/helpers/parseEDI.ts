@@ -1,4 +1,3 @@
-
 interface Order
 {
 	ordersHtml: string[],
@@ -157,7 +156,6 @@ ${orderInfo.orderType}
   ${orderInfo.ordersHtml}
 <div class="notes-section">
 	<div>
-		<strong>Notes/Comments</strong>
 		${orderInfo.messages}
 	</div>
 </div>
@@ -297,87 +295,86 @@ function cleanBuyerPartyInfo(partyInfo)
 	}
 }
 
-function cleanPartyInfo(parties)
+function cleanPartyInfo(parties, orderType)
 {
-	for (let party in parties) {
-    for (let index in parties[party]) {
-        let address = "";
-        let extraFields = [];
-        // For Buyer, only show the last key (email and number)
-        if (party === "Buyer") {
-            const buyerKeys = Object.keys(parties[party]);
+    // If not POC (change order), inject first PER segment into Buyer
+
+    if (orderType !== "CHANGE" && parties.Buyer) {
+        const perSegment = convertedEDISegments.find(seg => seg.segment === "PER");
+        if (perSegment) {
+            // Extract phone and email from PER segment
+            let perNumbers = [];
+            let perEmails = [];
+            for (let key in perSegment) {
+                if (typeof perSegment[key] === "string") {
+                    const val = perSegment[key];
+                    const emailMatches = val.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi);
+                    if (emailMatches) perEmails = perEmails.concat(emailMatches);
+                    const phoneMatches = val.match(/\d{3,}[- ]?\d{2,}[- ]?\d{2,}/g);
+                    if (phoneMatches) perNumbers = perNumbers.concat(phoneMatches);
+                }
+            }
+            // Place in last Buyer slot
+            const buyerKeys = Object.keys(parties.Buyer);
             const lastKey = buyerKeys[buyerKeys.length - 1];
-            if (index !== lastKey) {
-                parties[party][index] = "";
-                continue;
-            } else {
-                // Clean up: extract only phone numbers and emails from last key
-                const infoObj = parties[party][index];
-                let perNumbers = [];
-                let perEmails = [];
-                for (let info in infoObj) {
-                    if (!isCommonPartyIdentifier(infoObj[info]) && !isPartyInfoElementUseful(infoObj[info])) {
-                        const val = infoObj[info];
-                        if (typeof val === "string") {
-                            // Find emails
-                            const emailMatches = val.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi);
-                            if (emailMatches) perEmails = perEmails.concat(emailMatches);
-                            // Find phone numbers (simple pattern)
-                            const phoneMatches = val.match(/\d{3,}[- ]?\d{2,}[- ]?\d{2,}/g);
-                            if (phoneMatches) perNumbers = perNumbers.concat(phoneMatches);
+            parties.Buyer[lastKey] = [...perNumbers, ...perEmails].join(' ');
+        }
+    }
+	for (let party in parties) {
+        for (let index in parties[party]) {
+            let address = "";
+            let extraFields = [];
+            // For Buyer, only show the last key (email and number)
+            if (party === "Buyer") {
+                const buyerKeys = Object.keys(parties[party]);
+                const lastKey = buyerKeys[buyerKeys.length - 1];
+                if (index !== lastKey) {
+                    parties[party][index] = "";
+                    continue;
+                } else {
+                    // Already handled above for change order
+                    continue;
+                }
+            }
+            for (let info in parties[party][index]) {
+                if (!isCommonPartyIdentifier(parties[party][index][info])) {
+                    const infoElement = parties[party][index][info];
+                    if (!isPartyInfoElementUseful(infoElement)) {
+                        if (typeof infoElement === "string") {
+                            const emailMatches = infoElement.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi);
+                            const phoneMatches = infoElement.match(/\d{3,}[- ]?\d{2,}[- ]?\d{2,}/g);
+                            let cleaned = infoElement;
+                            if (emailMatches) {
+                                emailMatches.forEach(email => {
+                                    extraFields.push(email);
+                                    cleaned = cleaned.replace(email, "");
+                                });
+                            }
+                            if (phoneMatches) {
+                                phoneMatches.forEach(phone => {
+                                    extraFields.push(phone);
+                                    cleaned = cleaned.replace(phone, "");
+                                });
+                            }
+                            if (cleaned.trim()) address += cleaned.trim() + ' ';
+                        } else {
+                            address += parties[party][index][info] + ' ';
                         }
                     }
+                    console.log(infoElement);
                 }
-                parties[party][index] = [...perNumbers, ...perEmails].join(' ');
-                continue;
             }
+            parties[party][index] = address;
+            let extraIndex = Number(index) + 1;
+            extraFields.forEach(val => {
+                parties[party][extraIndex++] = val;
+            });
         }
-        for (let info in parties[party][index]) {
-            if (!isCommonPartyIdentifier(parties[party][index][info])) {
-                const infoElement = parties[party][index][info];
-                if (!isPartyInfoElementUseful(infoElement)) {
-                    // Split phone numbers and emails into separate keys
-                    if (typeof infoElement === "string") {
-                        // Find emails
-                        const emailMatches = infoElement.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi);
-                        // Find phone numbers (simple pattern)
-                        const phoneMatches = infoElement.match(/\d{3,}[- ]?\d{2,}[- ]?\d{2,}/g);
-                        // Remove found emails and phones from the original string
-                        let cleaned = infoElement;
-                        if (emailMatches) {
-                            emailMatches.forEach(email => {
-                                extraFields.push(email);
-                                cleaned = cleaned.replace(email, "");
-                            });
-                        }
-                        if (phoneMatches) {
-                            phoneMatches.forEach(phone => {
-                                extraFields.push(phone);
-                                cleaned = cleaned.replace(phone, "");
-                            });
-                        }
-                        // Add remaining text if not empty
-                        if (cleaned.trim()) address += cleaned.trim() + ' ';
-                    } else {
-                        address += parties[party][index][info] + ' ';
-                    }
-                }
-                console.log(infoElement);
-            }
+        if (party == "Buyer") {
+            cleanBuyerPartyInfo(parties[party]);
         }
-        // Assign main address
-        parties[party][index] = address;
-        // Assign extra fields as new keys
-        let extraIndex = Number(index) + 1;
-        extraFields.forEach(val => {
-            parties[party][extraIndex++] = val;
-        });
     }
-    if (party == "Buyer") {
-        cleanBuyerPartyInfo(parties[party]);
-    }
-}
-return parties;
+    return parties;
 }
 
 function getPartyInfo(ediSegments, currentSegmentIndex, numberOfPartyFields)
@@ -486,14 +483,34 @@ function generateHtmlForPartiesFromPartyInfo(parties)
 	return partiesHtml;
 }
 
+function generateNotesHtml()
+{
+	
+}
+
 function generateHtmlForOrdersFromSegments(segments, type)
 {
-	const ordersHtml = [];
-	const requiredDeliveryDate = findSegment(convertedEDISegments, "DTM")[0]["DTM02"];
-
-	for (let segment of segments)
-	{
-		const html = `<div class="table-container">
+    const ordersHtml = [];
+    const requiredDeliveryDate = findSegment(convertedEDISegments, "DTM")[0]["DTM02"];
+    const notes = findSegment(convertedEDISegments, "PID");
+    console.log("Notes: ", notes);
+    for (let i = 0; i < segments.length; i++) {
+        const segment = segments[i];
+        let html = "";
+        // Prepare note list for this item
+        let noteItems = [];
+        // Add item number if present
+        if (segment["PO1013"]) {
+            noteItems.push(`Item Number: ${segment["PO1013"]}`);
+        }
+        // Add PID note if present
+        if (notes && notes[i] && notes[i].PID05) {
+            noteItems.push(notes[i].PID05);
+        }
+        let noteHtml = noteItems.length > 0 ? `<ul>${noteItems.map(n => `<li>${n}</li>`).join('')}</ul>` : "";
+        if (type == "POC")
+        {
+            html = `<div class="table-container">
 		<table>
 		    <tr>
 			<th>Line</th>
@@ -512,9 +529,37 @@ function generateHtmlForOrdersFromSegments(segments, type)
 			<td>${formatDateString(requiredDeliveryDate)}</td>
 		    </tr>
 		</table>
+		${noteHtml}
 	    </div>
 	    `;
 
+	
+		}
+		else
+		{
+			html = `<div class="table-container">
+		<table>
+		    <tr>
+			<th>Line</th>
+			<th>Customer Part#</th>
+			<th>QTY Ordered/UM</th>
+			<th>Price/UM</th>
+			<th>Amount</th>
+			<th>Delivery Date</th>
+		    </tr>
+		    <tr>
+			<td>${segment[type + "01"]}</td>
+			<td>${segment[type + "07"]}</td>
+			<td>${segment[type + "02"]}/${segment[type + "03"]}</td>
+			<td>${segment[type + "04"]}/${segment[type + "03"]}</td>
+			<td>${segment[type + "04"]*segment[type + "02"]}</td>
+			<td>${formatDateString(requiredDeliveryDate)}</td>
+		    </tr>
+		</table>
+		${noteHtml}
+	    </div>
+	    `;
+		}
 		ordersHtml.push(html);
 	}
 
@@ -534,7 +579,10 @@ function determinePDFLayoutByOrderType(orderType)
 }
 
 function generateDocumentFromEDI(base64String)
-{
+{    // Reformat EDI so each segment is on its own line
+    if (typeof base64String === 'string' && base64String.includes('~')) {
+        base64String = base64String.replace(/~/g, '\n');
+    }
 	let numberOfSegments = base64String.split('\n\n').length;
 	let splitByExpression = '\n\n';
 
@@ -554,12 +602,12 @@ function generateDocumentFromEDI(base64String)
 	{
 		const ediSegments = base64String.split(splitByExpression);
 
-		const orderInfo = {};
+		const orderInfo = {} as Order;
 		convertedEDISegments = parseEDI(ediSegments);	
 		console.log(convertedEDISegments);
 		const ot = determinePDFLayoutByOrderType(findSegment(convertedEDISegments, "ST")[0]["ST01"]);
 
-		const parties = cleanPartyInfo(getParties(convertedEDISegments));
+		const parties = cleanPartyInfo(getParties(convertedEDISegments), ot);
 		console.log("Parties: ", parties);
 		const messages = generateHtmlForMessagesFromMSG(findSegment(convertedEDISegments, "MSG"));	
 		const partiesHtml = generateHtmlForPartiesFromPartyInfo(parties);
