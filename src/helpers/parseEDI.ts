@@ -1,4 +1,3 @@
-let convertedEDISegments;
 
 interface Order
 {
@@ -6,8 +5,10 @@ interface Order
 	poNumber: string,
 	messages: string[],
 	orderType: string,
-	partiesHtml: {}
+	partiesHtml: {},
 };
+
+let convertedEDISegments;
 
 function buildHtml(orderInfo)
 {
@@ -107,8 +108,7 @@ ${orderInfo.orderType}
   <div class="horizontal-fields">
     <div>Order Type: Change to Purchase Order</div>
     <div>
-      PO Date:
-      ${findSegment(convertedEDISegments, "DTM")[0]["DTM02"]}
+      PO Date: ${formatDateString(findSegment(convertedEDISegments, "DTM")[0]["DTM02"])}
     </div>
   </div>
 
@@ -130,11 +130,7 @@ ${orderInfo.orderType}
   </div>
   <div class="horizontal-fields">
     <div class="vertical-fields">
-      <div>
-        <strong>Ship-From</strong>
-        <br />
-        ${orderInfo.partiesHtml["ShipFrom"]}
-      </div>
+
     </div>
 
     <div>
@@ -252,28 +248,136 @@ function findFieldAmountPerParty(ediSegments, currentSegmentIndex)
 
 }
 
+function isPartyInfoElementUseful(info)
+{
+	return (
+		info == 'N1' ||
+		info == 'BY' ||
+		info == 'BT' ||
+		info == 'ST' ||
+		info == 'SF' ||
+		info == 'ZZ' ||
+		info == 'PP' ||
+		info == 'FX' ||
+		info == 'EM'
+	);
+}
+
+function isAllowedString(value) {
+  if (typeof value !== "string") return true;
+
+  const s = value.trim();
+  if (!s) return true;
+
+  // Email anywhere in the string
+  const containsEmail = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(s);
+  if (containsEmail) return false;
+
+  // Any digit anywhere (covers phone numbers, ZIPs, street numbers, etc.)
+  const containsAnyDigit = /\d/.test(s);
+  if (containsAnyDigit) return false;
+
+  return true;
+}
+
+
+function isPartyBuyer(party)
+{
+	return party == "Buyer";
+}
+
+function cleanBuyerPartyInfo(partyInfo)
+{
+	for (let info in partyInfo)
+	{
+		if (!isAllowedString(partyInfo[info]))
+		{
+			console.log("IINFO: ", partyInfo[info]);
+		}
+	}
+}
+
 function cleanPartyInfo(parties)
 {
-	for (let party in parties)
-	{
-
-		for (let index in parties[party])
-		{
-		
-			let address = "";
-			
-			for (let info in parties[party][index])
-			{
-				if (!isCommonPartyIdentifier(parties[party][index][info]))
-				{
-					address += parties[party][index][info] + ' ';		
-				}
-			}
-			parties[party][index] = address;
-		}
-
-	}
-	return parties;
+	for (let party in parties) {
+    for (let index in parties[party]) {
+        let address = "";
+        let extraFields = [];
+        // For Buyer, only show the last key (email and number)
+        if (party === "Buyer") {
+            const buyerKeys = Object.keys(parties[party]);
+            const lastKey = buyerKeys[buyerKeys.length - 1];
+            if (index !== lastKey) {
+                parties[party][index] = "";
+                continue;
+            } else {
+                // Clean up: extract only phone numbers and emails from last key
+                const infoObj = parties[party][index];
+                let perNumbers = [];
+                let perEmails = [];
+                for (let info in infoObj) {
+                    if (!isCommonPartyIdentifier(infoObj[info]) && !isPartyInfoElementUseful(infoObj[info])) {
+                        const val = infoObj[info];
+                        if (typeof val === "string") {
+                            // Find emails
+                            const emailMatches = val.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi);
+                            if (emailMatches) perEmails = perEmails.concat(emailMatches);
+                            // Find phone numbers (simple pattern)
+                            const phoneMatches = val.match(/\d{3,}[- ]?\d{2,}[- ]?\d{2,}/g);
+                            if (phoneMatches) perNumbers = perNumbers.concat(phoneMatches);
+                        }
+                    }
+                }
+                parties[party][index] = [...perNumbers, ...perEmails].join(' ');
+                continue;
+            }
+        }
+        for (let info in parties[party][index]) {
+            if (!isCommonPartyIdentifier(parties[party][index][info])) {
+                const infoElement = parties[party][index][info];
+                if (!isPartyInfoElementUseful(infoElement)) {
+                    // Split phone numbers and emails into separate keys
+                    if (typeof infoElement === "string") {
+                        // Find emails
+                        const emailMatches = infoElement.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi);
+                        // Find phone numbers (simple pattern)
+                        const phoneMatches = infoElement.match(/\d{3,}[- ]?\d{2,}[- ]?\d{2,}/g);
+                        // Remove found emails and phones from the original string
+                        let cleaned = infoElement;
+                        if (emailMatches) {
+                            emailMatches.forEach(email => {
+                                extraFields.push(email);
+                                cleaned = cleaned.replace(email, "");
+                            });
+                        }
+                        if (phoneMatches) {
+                            phoneMatches.forEach(phone => {
+                                extraFields.push(phone);
+                                cleaned = cleaned.replace(phone, "");
+                            });
+                        }
+                        // Add remaining text if not empty
+                        if (cleaned.trim()) address += cleaned.trim() + ' ';
+                    } else {
+                        address += parties[party][index][info] + ' ';
+                    }
+                }
+                console.log(infoElement);
+            }
+        }
+        // Assign main address
+        parties[party][index] = address;
+        // Assign extra fields as new keys
+        let extraIndex = Number(index) + 1;
+        extraFields.forEach(val => {
+            parties[party][extraIndex++] = val;
+        });
+    }
+    if (party == "Buyer") {
+        cleanBuyerPartyInfo(parties[party]);
+    }
+}
+return parties;
 }
 
 function getPartyInfo(ediSegments, currentSegmentIndex, numberOfPartyFields)
@@ -285,10 +389,20 @@ function getPartyInfo(ediSegments, currentSegmentIndex, numberOfPartyFields)
 	}
 	return partyInfo;
 }
-
+/*
+function cleanPartyInfo(partyInfo)
+{
+	for (let info in partyInfo)
+	{
+		for (let element in partyInfo[info])
+		{
+			if (element == "segment") delete partyInfo[info][element];
+		}
+	}
+}
+*/
 function getParties(ediSegments)
 {
-
 	const parties = 
 	{
 		"ShipTo": {},
@@ -306,7 +420,6 @@ function getParties(ediSegments)
 			console.log("Amount: ", numberOfPartyFields);
 			const partyType = ediSegments[i]["N101"];
 			const partyInfo = getPartyInfo(ediSegments, i, numberOfPartyFields);
-			
 			switch (partyType)
 			{
 				case "BY":
@@ -317,9 +430,6 @@ function getParties(ediSegments)
 				break;
 				case "BT":
 				parties["BillTo"] = partyInfo;
-				break;
-				case "SF":
-				parties["ShipFrom"] = partyInfo;
 				break;
 			}
 		}
@@ -399,7 +509,7 @@ function generateHtmlForOrdersFromSegments(segments, type)
 			<td>${segment[type + "03"]}/${segment[type + "05"]}</td>
 			<td>${segment[type + "06"]}/${segment[type + "05"]}</td>
 			<td>${segment[type + "03"]*segment[type + "06"]}</td>
-			<td>${requiredDeliveryDate}</td>
+			<td>${formatDateString(requiredDeliveryDate)}</td>
 		    </tr>
 		</table>
 	    </div>
@@ -428,26 +538,29 @@ function generateDocumentFromEDI(base64String)
 	let numberOfSegments = base64String.split('\n\n').length;
 	let splitByExpression = '\n\n';
 
-	if (numberOfSegments <= 3)
+	if (numberOfSegments < 3) 
 	{
 		numberOfSegments = base64String.split('\r\n').length;
 		splitByExpression = '\r\n';
 	}
 	
-	if (numberOfSegments <= 3)
+	if (numberOfSegments < 3) 
 	{
 		numberOfSegments = base64String.split('\n').length;
 		splitByExpression = '\n';
 	}
-	
+
 	if (numberOfSegments > 3)
 	{
 		const ediSegments = base64String.split(splitByExpression);
-		const orderInfo = {} as Order;
+
+		const orderInfo = {};
 		convertedEDISegments = parseEDI(ediSegments);	
+		console.log(convertedEDISegments);
 		const ot = determinePDFLayoutByOrderType(findSegment(convertedEDISegments, "ST")[0]["ST01"]);
 
 		const parties = cleanPartyInfo(getParties(convertedEDISegments));
+		console.log("Parties: ", parties);
 		const messages = generateHtmlForMessagesFromMSG(findSegment(convertedEDISegments, "MSG"));	
 		const partiesHtml = generateHtmlForPartiesFromPartyInfo(parties);
 		const orderType = generateHtmlForChangeOrderAlert(findSegment(convertedEDISegments, "ST"));
@@ -477,6 +590,17 @@ function generateDocumentFromEDI(base64String)
 	}
 	
 	return base64String;
+}
+
+function formatDateString(dateStr) {
+    // Expecting YYYYMMDD
+    if (typeof dateStr === 'string' && dateStr.length === 8) {
+        const year = dateStr.substring(0, 4);
+        const month = dateStr.substring(4, 6);
+        const day = dateStr.substring(6, 8);
+        return `${month}/${day}/${year}`;
+    }
+    return dateStr;
 }
 
 export default generateDocumentFromEDI;
