@@ -4,7 +4,6 @@ import PurchaseOrderHTML from "../classes/htmlBuilder";
 
 export async function httpTrigger1(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> 
 {
-    	
 	const attachments = request.params["Attachments"];
 
 	context.log(`Http function processed request for url "${request.url}"`);
@@ -15,7 +14,7 @@ export async function httpTrigger1(request: HttpRequest, context: InvocationCont
 
 	const pdf = new PurchaseOrderHTML(factory);
 
-	return { body: JSON.stringify(pdf.purchaseOrder.getPurchaseOrder()) };
+	return { body: JSON.stringify(pdf.purchaseOrderHTML) };
 };
 
 app.http('httpTrigger1', {

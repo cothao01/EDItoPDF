@@ -1,39 +1,30 @@
 import LineInfo from "../interfaces/lineInfo";
 import ItemInfo from "../interfaces/itemInfo";
 import formatDateString from "../helpers/helpers";
-
-interface OrderInfo
-{
-    poNumber    : Number;
-    orderType   : String;
-    messages    : Array<{}>;
-    segments    : Array<{}>;
-    notes    : Array<{}>;
-    parties     : {};   
-    orderLines    : Array<LineInfo>;
-    itemInfos   : Array<ItemInfo>;
-}
+import OrderInfo from "../interfaces/orderInfo";
 
 class PurchaseOrder
 {
     poNumber    : Number;
     ediString   : String;
     orderType   : String;
+    poDate   : String = "";
     notes    : Array<{}>;
     segments    : Array<{}>;
     messages    : Array<{}>;
     itemInfos : Array<ItemInfo> = [];
-    parties     : {};
+    parties     : {} = {};
     orderLines    : Array<LineInfo>;
 
     constructor(ediString)
     {
         this.ediString = ediString;
         this.segments = this.getSegments();
-        this.parties = this.getParties();
+        this.mapParties();
         this.orderType = this.getOrderType();
         this.messages = this.getMessages();
         this.poNumber = this.getPONumber();
+        this.mapPODate();
         this.notes = this.getNotes();
         this.orderLines = this.getOrderLines();
         this.mapItemInfos();
@@ -129,6 +120,11 @@ class PurchaseOrder
         }
     }
 
+    mapPODate() : void
+    {
+        this.poDate = formatDateString(this.findSegment(this.segments, "BEG")[0]["BEG05"]);
+    }
+
     getOrderType() : String
     {
         const poSegmentLength = this.findSegment(this.segments, "PO1").length;
@@ -139,6 +135,98 @@ class PurchaseOrder
         }
 
         return "NEW";
+    }
+    isPartyInfoElementUseful(info) : Boolean
+    {
+	    return (
+		info == 'N1' ||
+		info == 'BY' ||
+		info == 'BT' ||
+		info == 'ST' ||
+		info == 'SF' ||
+		info == 'ZZ' ||
+		info == 'PP' ||
+		info == 'FX' ||
+		info == 'EM'
+	);
+    }
+    
+    cleanPartyInfo() : void
+    {
+    // If not POC (change order), inject first PER segment into Buyer
+
+        if (this.orderType !== "CHANGE" && this.parties["Buyer"]) {
+            const perSegment = this.segments.find(seg => seg["segment"] === "PER");
+        if (perSegment) {
+            // Extract phone and email from PER segment
+            let perNumbers = [];
+            let perEmails = [];
+            for (let key in perSegment) {
+                if (typeof perSegment[key] === "string") {
+                    const val = perSegment[key];
+                    const emailMatches = val.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi);
+                    if (emailMatches) perEmails = perEmails.concat(emailMatches);
+                    const phoneMatches = val.match(/\d{3,}[- ]?\d{2,}[- ]?\d{2,}/g);
+                    if (phoneMatches) perNumbers = perNumbers.concat(phoneMatches);
+                }
+            }
+            // Place in last Buyer slot
+            const buyerKeys = Object.keys(this.parties["Buyer"]);
+            const lastKey = buyerKeys[buyerKeys.length - 1];
+            this.parties["Buyer"][lastKey] = [...perNumbers, ...perEmails].join(' ');
+        }
+    }
+	for (let party in this.parties) {
+        for (let index in this.parties[party]) {
+            let address = "";
+            let extraFields = [];
+            // For Buyer, only show the last key (email and number)
+            if (party === "Buyer") {
+                const buyerKeys = Object.keys(this.parties[party]);
+                const lastKey = buyerKeys[buyerKeys.length - 1];
+                if (index !== lastKey) {
+                    this.parties[party][index] = "";
+                    continue;
+                } else {
+                    // Already handled above for change order
+                    continue;
+                }
+            }
+            for (let info in this.parties[party][index]) {
+                if (!this.isCommonPartyIdentifier(this.parties[party][index][info])) {
+                    const infoElement = this.parties[party][index][info];
+                    if (!this.isPartyInfoElementUseful(infoElement)) {
+                        if (typeof infoElement === "string") {
+                            const emailMatches = infoElement.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi);
+                            const phoneMatches = infoElement.match(/\d{3,}[- ]?\d{2,}[- ]?\d{2,}/g);
+                            let cleaned = infoElement;
+                            if (emailMatches) {
+                                emailMatches.forEach(email => {
+                                    extraFields.push(email);
+                                    cleaned = cleaned.replace(email, "");
+                                });
+                            }
+                            if (phoneMatches) {
+                                phoneMatches.forEach(phone => {
+                                    extraFields.push(phone);
+                                    cleaned = cleaned.replace(phone, "");
+                                });
+                            }
+                            if (cleaned.trim()) address += cleaned.trim() + ' ';
+                        } else {
+                            address += this.parties[party][index][info] + ' ';
+                        }
+                    }
+                    console.log(infoElement);
+                }
+            }
+            this.parties[party][index] = address;
+            let extraIndex = Number(index) + 1;
+            extraFields.forEach(val => {
+                this.parties[party][extraIndex++] = val;
+            });
+        }
+    }
     }
 
     getPartyInfo(currentSegmentIndex, numberOfPartyFields) : {}
@@ -151,16 +239,8 @@ class PurchaseOrder
 	    return partyInfo;
     }
 
-    getParties() : {}
+    mapParties() : void
     {
-    	const parties = 
-    	{
-    		"ShipTo": {},
-    		"BillTo": {},
-    		"Buyer": {},
-    		"ShipFrom": {},
-    	};
-
     	for (let i = 0; i < this.segments.length; ++i)
     	{
     		const segmentName = this.segments[i]["segment"];
@@ -172,19 +252,19 @@ class PurchaseOrder
     			switch (partyType)
     			{
     				case "BY":
-    				parties["Buyer"] = partyInfo;
+    				this.parties["Buyer"] = partyInfo;
     				break;
     				case "ST":
-    				parties["ShipTo"] = partyInfo;
+    				this.parties["ShipTo"] = partyInfo;
     				break;
     				case "BT":
-    				parties["BillTo"] = partyInfo;
+    				this.parties["BillTo"] = partyInfo;
     				break;
     			}
     		}
     	}
 
-    	return parties;
+        this.cleanPartyInfo();
     }
 
     getSegments() : Array<{}>
@@ -289,6 +369,7 @@ class PurchaseOrder
             orderType: this.orderType,
             messages: this.messages,
             poNumber: this.poNumber,
+            poDate: this.poDate,
             orderLines: this.orderLines,
             notes: this.notes,
             itemInfos: this.itemInfos
