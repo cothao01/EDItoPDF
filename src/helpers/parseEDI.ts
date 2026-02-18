@@ -468,7 +468,7 @@ function generateHtmlForOrdersFromSegments(segments, type)
     const ordersHtml = [];
     const requiredDeliveryDate = findSegment(convertedEDISegments, "DTM")[0]["DTM02"];
     const notes = findSegment(convertedEDISegments, "PID");
-    console.log("Notes: ", notes);
+
     for (let i = 0; i < segments.length; i++) {
         const segment = segments[i];
         let html = "";
@@ -563,7 +563,7 @@ function determinePDFLayoutByOrderType(orderType)
 
 function getPODate()
 {
-	
+
 }
 
 function generateDocumentFromEDI(base64String)

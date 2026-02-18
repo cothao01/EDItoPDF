@@ -15,7 +15,7 @@ export async function httpTrigger1(request: HttpRequest, context: InvocationCont
 
 	const pdf = new PurchaseOrderHTML(factory);
 
-	return { body: JSON.stringify(pdf.orderLineHTML) };
+	return { body: JSON.stringify(pdf.purchaseOrder.getPurchaseOrder()) };
 };
 
 app.http('httpTrigger1', {

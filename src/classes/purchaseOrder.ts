@@ -1,4 +1,6 @@
 import LineInfo from "../interfaces/lineInfo";
+import ItemInfo from "../interfaces/itemInfo";
+import formatDateString from "../helpers/helpers";
 
 interface OrderInfo
 {
@@ -9,6 +11,7 @@ interface OrderInfo
     notes    : Array<{}>;
     parties     : {};   
     orderLines    : Array<LineInfo>;
+    itemInfos   : Array<ItemInfo>;
 }
 
 class PurchaseOrder
@@ -19,6 +22,7 @@ class PurchaseOrder
     notes    : Array<{}>;
     segments    : Array<{}>;
     messages    : Array<{}>;
+    itemInfos : Array<ItemInfo> = [];
     parties     : {};
     orderLines    : Array<LineInfo>;
 
@@ -32,6 +36,7 @@ class PurchaseOrder
         this.poNumber = this.getPONumber();
         this.notes = this.getNotes();
         this.orderLines = this.getOrderLines();
+        this.mapItemInfos();
     }
 
     findSegment(segments, segmentID) : Array<{}>
@@ -211,6 +216,22 @@ class PurchaseOrder
         return this.findSegment(this.segments, "PID");
     }
 
+    mapItemInfos() : void
+    {    
+        for (let i = 0; i < this.notes.length; i++) 
+        {
+            const segment = this.notes[i];
+
+            const itemSegment = this.findSegment(this.segments, "PO1");
+
+            const itemInfo = {
+                itemNumber: itemSegment[0]["PO1013"], 
+                itemDescription: segment["PID05"]} as ItemInfo;
+
+           this.itemInfos.push(itemInfo); 
+        }
+    }
+
     getOrderLines() : Array<LineInfo>
     {
         const orderLines : Array<LineInfo> = [];
@@ -228,8 +249,8 @@ class PurchaseOrder
                 const orderLine = {
                     lineNumber: lineSegment[i][lineType + "01"],
                     customerPartNumber :  lineSegment[i][lineType + "09"],
-                    qtyPerUOM :  lineSegment[i][lineType + "03"],
-                    pricePerUOM :  lineSegment[i][lineType + "06"],
+                    qtyPerUOM :  `${lineSegment[i][lineType + "03"]}/${lineSegment[i][lineType + "05"]}`,
+                    pricePerUOM :  `${lineSegment[i][lineType + "06"]}/${lineSegment[i][lineType + "05"]}`,
                     amount :  parseFloat(lineSegment[i][lineType + "03"]) * parseFloat(lineSegment[i][lineType + "06"]),
                     deliveryDate:  this.getRequiredDeliveryDate()} as LineInfo;
 
@@ -244,15 +265,13 @@ class PurchaseOrder
 
             for (let i = 0; i < lineSegment.length; ++i)
             {
-                console.log("Line RIGHT HERE YOOHOO: " + JSON.stringify(lineSegment[i]));
-
                 const orderLine = {
                     lineNumber: lineSegment[i][lineType + "01"],
                     customerPartNumber :  lineSegment[i][lineType + "07"],
-                    qtyPerUOM :  lineSegment[i][lineType + "02"],
-                    pricePerUOM :  lineSegment[i][lineType + "04"],
-                    amount :  parseFloat(lineSegment[i][lineType + "04"]) * parseFloat(lineSegment[i][lineType + "06"]),
-                    deliveryDate:  this.getRequiredDeliveryDate()} as LineInfo;
+                    qtyPerUOM :  `${lineSegment[i][lineType + "02"]}/${lineSegment[i][lineType + "03"]}`,
+                    pricePerUOM :  `${lineSegment[i][lineType + "04"]}/${lineSegment[i][lineType + "03"]}`,
+                    amount :  parseFloat(lineSegment[i][lineType + "04"]) * parseFloat(lineSegment[i][lineType + "02"]),
+                    deliveryDate:  formatDateString(this.getRequiredDeliveryDate())} as LineInfo;
 
                 orderLines.push(orderLine);
             }
@@ -271,7 +290,8 @@ class PurchaseOrder
             messages: this.messages,
             poNumber: this.poNumber,
             orderLines: this.orderLines,
-            notes: this.notes
+            notes: this.notes,
+            itemInfos: this.itemInfos
         }
     }
 }
