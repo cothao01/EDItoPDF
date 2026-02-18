@@ -4,6 +4,7 @@ interface Order
 	poNumber: string,
 	messages: string[],
 	orderType: string,
+	orderTypeDescription: string,
 	partiesHtml: {},
 };
 
@@ -165,7 +166,6 @@ ${orderInfo.orderType}
 
 function parseEDISegment(segment)
 {
-
 	let field = '';
 	let dataElementIndex = 0;
 	let segmentCharacterIndex = 0;
@@ -201,19 +201,16 @@ function parseEDISegment(segment)
 	segmentInfo[segmentID + '0' + dataElementIndex] = field;
 
 	return segmentInfo;
-
 }
 
 function parseEDI(ediSegments)
 {
-
 	const cleanedSegments = [];
 	for (let segment of ediSegments)
 	{
 		const segmentInfo = parseEDISegment(segment);
 
 		cleanedSegments.push(segmentInfo);
-
 	}
 	
 	return cleanedSegments;
@@ -276,12 +273,6 @@ function isAllowedString(value) {
   if (containsAnyDigit) return false;
 
   return true;
-}
-
-
-function isPartyBuyer(party)
-{
-	return party == "Buyer";
 }
 
 function cleanBuyerPartyInfo(partyInfo)
@@ -386,18 +377,7 @@ function getPartyInfo(ediSegments, currentSegmentIndex, numberOfPartyFields)
 	}
 	return partyInfo;
 }
-/*
-function cleanPartyInfo(partyInfo)
-{
-	for (let info in partyInfo)
-	{
-		for (let element in partyInfo[info])
-		{
-			if (element == "segment") delete partyInfo[info][element];
-		}
-	}
-}
-*/
+
 function getParties(ediSegments)
 {
 	const parties = 
@@ -483,11 +463,6 @@ function generateHtmlForPartiesFromPartyInfo(parties)
 	return partiesHtml;
 }
 
-function generateNotesHtml()
-{
-	
-}
-
 function generateHtmlForOrdersFromSegments(segments, type)
 {
     const ordersHtml = [];
@@ -532,7 +507,6 @@ function generateHtmlForOrdersFromSegments(segments, type)
 		${noteHtml}
 	    </div>
 	    `;
-
 	
 		}
 		else
@@ -566,6 +540,15 @@ function generateHtmlForOrdersFromSegments(segments, type)
 	return ordersHtml;
 }
 
+function determineOrderTypeDescription(orderType)
+{
+	if (orderType != "850")
+	{
+		return "Change to Purchase Order";
+	}
+	return "Purchase Order";
+}
+
 function determinePDFLayoutByOrderType(orderType)
 {
 	if (orderType != "850") 
@@ -576,6 +559,11 @@ function determinePDFLayoutByOrderType(orderType)
 	{
 		return "NEW";
 	}
+}
+
+function getPODate()
+{
+	
 }
 
 function generateDocumentFromEDI(base64String)
@@ -619,6 +607,7 @@ function generateDocumentFromEDI(base64String)
 				orderInfo.poNumber = findSegment(convertedEDISegments, "BCH")[0]["BCH03"];
 				orderInfo.messages = messages;
 				orderInfo.orderType = orderType;
+				orderInfo.orderTypeDescription = determineOrderTypeDescription(orderType);
 				orderInfo.partiesHtml = partiesHtml;
 				break;
 			case "NEW":	
@@ -628,6 +617,7 @@ function generateDocumentFromEDI(base64String)
 				orderInfo.poNumber = findSegment(convertedEDISegments, "BEG")[0]["BEG03"];
 				orderInfo.messages = messages;
 				orderInfo.orderType = orderType;
+				orderInfo.orderTypeDescription = determineOrderTypeDescription(orderType);
 				orderInfo.partiesHtml = partiesHtml;
 				break;
 		}

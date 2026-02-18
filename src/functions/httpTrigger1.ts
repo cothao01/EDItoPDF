@@ -1,5 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
-import generateDocumentFromEDI from "../helpers/parseEDI"
+import LeprinoPurchaseOrderFactory from "../classes/leprinoPurchaseOrderFactory";
+import PurchaseOrderHTML from "../classes/htmlBuilder";
 
 export async function httpTrigger1(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> 
 {
@@ -8,15 +9,13 @@ export async function httpTrigger1(request: HttpRequest, context: InvocationCont
 
 	context.log(`Http function processed request for url "${request.url}"`);
    
-	context.log("Request: ", request);
+	//const parsedEDIText = generateDocumentFromEDI(atob(atob(attachments)));
 
-	const parsedEDIText = generateDocumentFromEDI(atob(atob(attachments)));
+	const factory = new LeprinoPurchaseOrderFactory(atob(atob(attachments)));
 
-	context.log("EDI TEXT TESTING: ", parsedEDIText);
+	const pdf = new PurchaseOrderHTML(factory);
 
-    	const name = request.query.get('name') || await request.text() || 'world';
-
-    	return { body: parsedEDIText };
+	return { body: JSON.stringify(pdf.orderLineHTML) };
 };
 
 app.http('httpTrigger1', {
