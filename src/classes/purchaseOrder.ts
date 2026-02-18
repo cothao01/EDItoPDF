@@ -107,22 +107,35 @@ class PurchaseOrder
     {
         let poNumber;
 
+        console.log("ORDER TYPE: " + this.orderType);
         switch (this.orderType)
         {
             case "CHANGE":
                 poNumber = this.findSegment(this.segments, "BCH")[0]["BCH03"];
-                return poNumber;
+                break;
             case "NEW":
                 poNumber = this.findSegment(this.segments, "BEG")[0]["BEG03"];
-                return poNumber;
+                break;
             default:
-                return null;            
+                poNumber = null;            
         }
+
+        return poNumber        
     }
 
     mapPODate() : void
     {
-        this.poDate = formatDateString(this.findSegment(this.segments, "BEG")[0]["BEG05"]);
+        const begSegment = this.findSegment(this.segments, "BEG")[0];
+        if (begSegment && begSegment["BEG05"]) {
+            this.poDate = formatDateString(begSegment["BEG05"]);
+        } else {
+            const bchSegment = this.findSegment(this.segments, "BCH")[0];
+            if (bchSegment && bchSegment["BCH06"]) {
+                this.poDate = formatDateString(bchSegment["BCH06"]);
+            } else {
+                this.poDate = "";
+            }
+        }
     }
 
     getOrderType() : String
@@ -252,13 +265,13 @@ class PurchaseOrder
     			switch (partyType)
     			{
     				case "BY":
-    				this.parties["Buyer"] = partyInfo;
+    			 this.parties["Buyer"] = partyInfo;
     				break;
     				case "ST":
-    				this.parties["ShipTo"] = partyInfo;
+    			 this.parties["ShipTo"] = partyInfo;
     				break;
     				case "BT":
-    				this.parties["BillTo"] = partyInfo;
+    			 this.parties["BillTo"] = partyInfo;
     				break;
     			}
     		}
@@ -288,7 +301,7 @@ class PurchaseOrder
 
     getRequiredDeliveryDate() : String
     {
-        return this.findSegment(this.segments, "DTM")[0]["DTM02"];
+        return formatDateString(this.findSegment(this.segments, "DTM")[0]["DTM02"]);
     }
 
     getNotes() : Array<{}>

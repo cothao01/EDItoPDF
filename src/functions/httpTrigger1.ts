@@ -8,13 +8,13 @@ export async function httpTrigger1(request: HttpRequest, context: InvocationCont
 
 	context.log(`Http function processed request for url "${request.url}"`);
    
-	//const parsedEDIText = generateDocumentFromEDI(atob(atob(attachments)));
-
 	const factory = new LeprinoPurchaseOrderFactory(atob(atob(attachments)));
 
 	const pdf = new PurchaseOrderHTML(factory);
 
-	return { body: JSON.stringify(pdf.purchaseOrderHTML) };
+	const html = pdf.purchaseOrderHTML;
+
+	return { body: html};
 };
 
 app.http('httpTrigger1', {

@@ -1,5 +1,7 @@
 {
   "compilerOptions": {
+    "lib": ["es2022"],
+    "types": ["node"],
     "module": "commonjs",
     "target": "es6",
     "outDir": "dist",

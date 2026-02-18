@@ -1,6 +1,7 @@
 import PurchaseOrderFactory from "./purchaseOrderFactory";
 import PurchaseOrder from "./purchaseOrder";
 import OrderInfo from "../interfaces/orderInfo";
+import type {BodyInit} from "undici";
 
 class PurchaseOrderHTML
 {
@@ -10,7 +11,7 @@ class PurchaseOrderHTML
     partiesHTML : {} = {};
     messagesHTML : Array<String> = [];
     orderAlert : String = "";
-    purchaseOrderHTML : String = "";
+    purchaseOrderHTML : BodyInit = "";
 
     constructor(poFactory : PurchaseOrderFactory)
     {
@@ -258,7 +259,7 @@ ${this.orderAlert}
 	</div>
 </div>
 </body>
-</html>`
+</html>`;
 
     }    
 }
