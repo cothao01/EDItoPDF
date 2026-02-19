@@ -1,7 +1,9 @@
 import LineInfo from "../interfaces/lineInfo";
 import ItemInfo from "../interfaces/itemInfo";
-import formatDateString from "../helpers/helpers";
+import helpers from "../helpers/helpers";
 import OrderInfo from "../interfaces/orderInfo";
+
+const {formatDateString} = helpers;
 
 class PurchaseOrder
 {

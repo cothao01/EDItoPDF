@@ -9,4 +9,11 @@ function formatDateString(dateStr) {
     return dateStr;
 }
 
-export default formatDateString;
+function getCompanyNameFrom(subjectName) : String
+{
+    console.log(subjectName);
+    const subjectNameElementsSplitByDash = subjectName.split('-');
+    return subjectNameElementsSplitByDash[1].trim();
+}
+
+export default {formatDateString, getCompanyNameFrom};
