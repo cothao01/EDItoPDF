@@ -47,9 +47,11 @@ class PurchaseOrderHTML
     {
         const orderInfo = this.purchaseOrder.getPurchaseOrder();        
         const messages = orderInfo.messages;
-
+        
     	for (let message of messages)
 	    {
+            if (message["MSG01"] == undefined) continue;
+
 		    this.messagesHTML.push(`<div>${message["MSG01"]}</div>`);
 	    }
     }
@@ -61,8 +63,7 @@ class PurchaseOrderHTML
 
     	for (let party in parties)
 	    {   
-            console.log("PARTY: " + JSON.stringify(parties[party]));
-		    this.partiesHTML[party] = [];
+            this.partiesHTML[party] = [];
 		    for (let index in parties[party])
 		    {
 			    this.partiesHTML[party] += `<div>${parties[party][index]}</div>`;	
@@ -70,16 +71,30 @@ class PurchaseOrderHTML
 	    }
     }
 
+    buildItemInfos() : String
+    {
+        const orderInfo = this.purchaseOrder.getPurchaseOrder();
+        const itemInfos = orderInfo.itemInfos;
+            
+        const itemInfosHtml = `<ul>${itemInfos.map(item => 
+        {
+            return `${item.itemNumber ? `<li>${item.itemNumber}</li>` : ''}
+            ${item.itemDescription ? `<li>${item.itemDescription}</li>` : ''}`
+        }).join('')}</ul>`;
+
+        console.log("HTMNL: " + itemInfosHtml);
+
+        return itemInfosHtml;
+    }
+
     buildOrderLines() : void
     {
         const orderInfo = this.purchaseOrder.getPurchaseOrder();
         const orderLines = orderInfo.orderLines;
-        const itemInfos = orderInfo.itemInfos;
+        const itemInfosHtml = this.buildItemInfos();
 
         for (let i = 0; i < orderLines.length; i++) {
 
-            const itemInfosHtml = `<ul>${itemInfos.map(item => `<li>${item.itemNumber}</li><li>${item.itemDescription}</li>`).join('')}</ul>`;
-            
             let html = `<div class="table-container">
     		<table>
     		    <tr>
@@ -234,7 +249,7 @@ ${this.orderAlert}
     <div>
       <strong>Buyer</strong>
       <br />
-      ${this.partiesHTML["Buyer"]}
+      ${this.partiesHTML["Buyer"] ? this.partiesHTML["Buyer"] : "NO BUYER"}
     </div>
   </div>
 

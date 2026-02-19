@@ -105,6 +105,41 @@ class PurchaseOrder
     	return fieldCounter;
     }
 
+    getCleanedEDISegmentsFrom(ediSegments) : Array<{}>
+    {
+        const cleanedSegments = [];
+        for (let segment of ediSegments)
+	    {
+		    const segmentInfo = this.parseEDISegment(segment);
+
+    		cleanedSegments.push(segmentInfo);
+	    }
+	
+        console.log(cleanedSegments);
+
+	    return cleanedSegments;
+    }
+
+    stagePartyObject(segmentIndex, partyType) : void
+    {
+        let numberOfPartyFields = this.findFieldAmountPerParty(segmentIndex);
+        const partyInfo = this.getPartyInfo(segmentIndex, numberOfPartyFields);
+
+        switch (partyType)
+        {
+       	    case "BY":
+            this.parties["Buyer"] = partyInfo;
+       	    break;
+       	    case "ST":
+            this.parties["ShipTo"] = partyInfo;
+       	    break;
+       	    case "BT":
+            this.parties["BillTo"] = partyInfo;
+       	    break;
+        }
+ 
+    }
+
     getPONumber() : Number
     {
         let poNumber;
@@ -258,26 +293,13 @@ class PurchaseOrder
     {
     	for (let i = 0; i < this.segments.length; ++i)
     	{
-    		const segmentName = this.segments[i]["segment"];
-    		if (segmentName == "N1")
-    		{
-    			let numberOfPartyFields = this.findFieldAmountPerParty(i);
-    			const partyType = this.segments[i]["N101"];
-    			const partyInfo = this.getPartyInfo(i, numberOfPartyFields);
-    			switch (partyType)
-    			{
-    				case "BY":
-    			 this.parties["Buyer"] = partyInfo;
-    				break;
-    				case "ST":
-    			 this.parties["ShipTo"] = partyInfo;
-    				break;
-    				case "BT":
-    			 this.parties["BillTo"] = partyInfo;
-    				break;
-    			}
-    		}
-    	}
+            const segmentName = this.segments[i]["segment"];
+            if (segmentName == "N1")
+            {
+                const partyType = this.segments[i]["N101"];
+                this.stagePartyObject(i, partyType);
+            }
+        }
 
         this.cleanPartyInfo();
     }
@@ -285,14 +307,7 @@ class PurchaseOrder
     getSegments() : Array<{}>
     {
         const ediSegments = this.ediString.split('\n');
-        const cleanedSegments = [];
-    	for (let segment of ediSegments)
-	    {
-		    const segmentInfo = this.parseEDISegment(segment);
-
-    		cleanedSegments.push(segmentInfo);
-	    }
-	
+        const cleanedSegments = this.getCleanedEDISegmentsFrom(ediSegments);
 	    return cleanedSegments;
     }     
 
@@ -313,18 +328,29 @@ class PurchaseOrder
 
     mapItemInfos() : void
     {    
+           this.itemInfos = this.createItemInfos("PO1013", "PID05"); 
+    }
+
+    createItemInfos(segmentPositionPO, segmentPositionPID) : Array<ItemInfo>
+    {
+        const stagedItemInfos : Array<ItemInfo> = [];
+
         for (let i = 0; i < this.notes.length; i++) 
         {
-            const segment = this.notes[i];
+            const itemDescription = this.notes[i][segmentPositionPID];
+            const itemNumber = this.findSegment(this.segments, "PO1")[0][segmentPositionPO];
+            
+            const itemInfo = this.createItemInfo(itemNumber, itemDescription);
 
-            const itemSegment = this.findSegment(this.segments, "PO1");
-
-            const itemInfo = {
-                itemNumber: itemSegment[0]["PO1013"], 
-                itemDescription: segment["PID05"]} as ItemInfo;
-
-           this.itemInfos.push(itemInfo); 
+            stagedItemInfos.push(itemInfo); 
         }
+
+        return stagedItemInfos;
+    }
+
+    createItemInfo(itemNumber, itemDescription) : ItemInfo
+    {
+        return {itemNumber: itemNumber, itemDescription: itemDescription} as ItemInfo;
     }
 
     getOrderLines() : Array<LineInfo>
@@ -340,7 +366,6 @@ class PurchaseOrder
 
             for (let i = 0; i < lineSegment.length; ++i)
             {
-
                 const orderLine = {
                     lineNumber: lineSegment[i][lineType + "01"],
                     customerPartNumber :  lineSegment[i][lineType + "09"],
