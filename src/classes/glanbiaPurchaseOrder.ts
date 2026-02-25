@@ -1,5 +1,6 @@
 import PurchaseOrder from "./purchaseOrder";
 import LineInfo from "../interfaces/lineInfo";
+import OrderType from "../enums/enums";
 import helpers from "../helpers/helpers";
 
 const {formatDateString} = helpers;
@@ -59,22 +60,20 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
     getOrderLines() : Array<LineInfo>
     {
         const orderLines : Array<LineInfo> = [];
-        let lineType = "PO1";
 
-        if (this.orderType == "CHANGE") 
+        if (this.orderType == OrderType.CHANGE) 
         {    
-            lineType = "POC";
 
-            const lineSegment = this.findSegment(this.segments, lineType);
+            const lineSegment = this.findSegment(this.segments, this.orderType);
 
             for (let i = 0; i < lineSegment.length; ++i)
             {
                 const orderLine = {
-                    lineNumber: lineSegment[i][lineType + "01"],
-                    customerPartNumber :  lineSegment[i][lineType + "09"],
-                    qtyPerUOM :  `${lineSegment[i][lineType + "03"]}/${lineSegment[i][lineType + "05"]}`,
-                    pricePerUOM :  `${lineSegment[i][lineType + "06"]}/${lineSegment[i][lineType + "05"]}`,
-                    amount :  parseFloat(lineSegment[i][lineType + "03"]) * parseFloat(lineSegment[i][lineType + "06"]),
+                    lineNumber: lineSegment[i][this.orderType + "01"],
+                    customerPartNumber :  lineSegment[i][this.orderType + "09"],
+                    qtyPerUOM :  `${lineSegment[i][this.orderType + "03"]}/${lineSegment[i][this.orderType + "05"]}`,
+                    pricePerUOM :  `${lineSegment[i][this.orderType + "06"]}/${lineSegment[i][this.orderType + "05"]}`,
+                    amount :  parseFloat(lineSegment[i][this.orderType + "03"]) * parseFloat(lineSegment[i][this.orderType + "06"]),
                     deliveryDate:  this.getRequiredDeliveryDate()} as LineInfo;
 
                 orderLines.push(orderLine);
@@ -82,18 +81,16 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
         }
         else
         {
-            lineType = "PO1";
-
-            const lineSegment = this.findSegment(this.segments, lineType);
+            const lineSegment = this.findSegment(this.segments, this.orderType);
 
             for (let i = 0; i < lineSegment.length; ++i)
             {
                 const orderLine = {
-                    lineNumber: lineSegment[i][lineType + "01"],
-                    customerPartNumber :  parseInt(lineSegment[i][lineType + "09"]).toString(),
-                    qtyPerUOM :  `${lineSegment[i][lineType + "02"]}/${lineSegment[i][lineType + "03"]}`,
-                    pricePerUOM :  `${lineSegment[i][lineType + "04"]}/${lineSegment[i][lineType + "03"]}`,
-                    amount :  parseFloat(lineSegment[i][lineType + "04"]) * parseFloat(lineSegment[i][lineType + "02"]),
+                    lineNumber: lineSegment[i][this.orderType + "01"],
+                    customerPartNumber :  parseInt(lineSegment[i][this.orderType + "09"]).toString(),
+                    qtyPerUOM :  `${lineSegment[i][this.orderType + "02"]}/${lineSegment[i][this.orderType + "03"]}`,
+                    pricePerUOM :  `${lineSegment[i][this.orderType + "04"]}/${lineSegment[i][this.orderType + "03"]}`,
+                    amount :  parseFloat(lineSegment[i][this.orderType + "04"]) * parseFloat(lineSegment[i][this.orderType + "02"]),
                     deliveryDate:  formatDateString(this.getRequiredDeliveryDate())} as LineInfo;
 
                 orderLines.push(orderLine);

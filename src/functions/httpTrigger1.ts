@@ -4,6 +4,7 @@ import GlanbiaPurchaseOrderFactory from "../classes/glanbiaPurchaseOrderFactory"
 import HormelPurchaseOrderFactory from "../classes/hormelPuchaseOrderFactory";
 import PurchaseOrderHTML from "../classes/htmlBuilder";
 import helpers from "../helpers/helpers";
+import PurchaseOrderFactory from "../classes/purchaseOrderFactory";
 
 const {getCompanyNameFrom} = helpers;
 
@@ -16,8 +17,14 @@ function determineCompanyFactory(companyName, ediString)
         "HORMEL": HormelPurchaseOrderFactory,
     }
 
-	return new factories[companyName](ediString);
-
+	if (factories[companyName])
+	{
+		return new factories[companyName](ediString);
+	}
+	else
+	{
+		return new PurchaseOrderFactory(ediString);
+	}
 }
 
 export async function httpTrigger1(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> 

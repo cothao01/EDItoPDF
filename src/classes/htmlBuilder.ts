@@ -1,6 +1,7 @@
 import PurchaseOrderFactory from "./purchaseOrderFactory";
 import PurchaseOrder from "./purchaseOrder";
 import OrderInfo from "../interfaces/orderInfo";
+import OrderType from "../enums/enums";
 import type {BodyInit} from "undici";
 
 class PurchaseOrderHTML
@@ -35,7 +36,7 @@ class PurchaseOrderHTML
         const orderInfo = this.purchaseOrder.getPurchaseOrder();   
         const orderType = orderInfo.orderType;
         
-    	if (orderType == "CHANGE")
+    	if (orderType == OrderType.CHANGE)
 	    {   
 	        this.orderAlert = `<div class="alert">
             *** POSSIBLE DUPLICATE PO# OR CHANGES TO EXISTING PO#, PLEASE CHECK ***

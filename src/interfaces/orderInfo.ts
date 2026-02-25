@@ -1,10 +1,11 @@
 import LineInfo from "./lineInfo";
 import ItemInfo from "./itemInfo";
+import OrderType from "../enums/enums";
 
 interface OrderInfo
 {
     poNumber    : Number;
-    orderType   : String;
+    orderType   : OrderType;
     poDate   : String;
     messages    : Array<{}>;
     segments    : Array<{}>;
