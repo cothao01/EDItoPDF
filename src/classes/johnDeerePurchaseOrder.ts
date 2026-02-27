@@ -5,11 +5,11 @@ import helpers from "../helpers/helpers";
 
 const {formatDateString} = helpers;
 
-class GlanbiaPurchaseOrder extends PurchaseOrder
+class JohnDeerePurchaseOrder extends PurchaseOrder
 {
     getSegments() : Array<{}>
     {
-        const ediSegments = this.ediString.split('~');
+        const ediSegments = this.ediString.split('\n');
         const cleanedSegments = this.getCleanedEDISegmentsFrom(ediSegments);
         return cleanedSegments;
     }
@@ -19,12 +19,6 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
            this.itemInfos = this.createItemInfos("PO107", "PID05"); 
     }
 
-    // Glanbia has too many redundant messages, best to leave them out
-    getMessages() : Array<{}>
-    {
-        return [{}];
-    }
-    
     mapParties() : void
     {
         let n2Count = 0;
@@ -70,7 +64,7 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
             {
                 const orderLine = {
                     lineNumber: lineSegment[i][this.orderLineType + "01"],
-                    customerPartNumber :  lineSegment[i][this.orderLineType + "09"],
+                    customerPartNumber :  lineSegment[i][this.orderLineType + "07"],
                     qtyPerUOM :  `${lineSegment[i][this.orderLineType + "02"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     pricePerUOM :  `${lineSegment[i][this.orderLineType + "04"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     amount :  parseFloat(lineSegment[i][this.orderLineType + "04"]) * parseFloat(lineSegment[i][this.orderLineType + "02"]),
@@ -87,7 +81,7 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
             {
                 const orderLine = {
                     lineNumber: lineSegment[i][this.orderLineType + "01"],
-                    customerPartNumber :  parseInt(lineSegment[i][this.orderLineType + "09"]).toString(),
+                    customerPartNumber :  lineSegment[i][this.orderLineType + "07"],
                     qtyPerUOM :  `${lineSegment[i][this.orderLineType + "02"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     pricePerUOM :  `${lineSegment[i][this.orderLineType + "04"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     amount :  parseFloat(lineSegment[i][this.orderLineType + "04"]) * parseFloat(lineSegment[i][this.orderLineType + "02"]),
@@ -100,6 +94,11 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
 
         return orderLines;
     }
+
+    getRequiredDeliveryDate(): String {
+        return formatDateString(this.findSegment(this.segments, "SCH")[0]["SCH06"]);
+    }
+
 }
 
-export default GlanbiaPurchaseOrder;
+export default JohnDeerePurchaseOrder;

@@ -11,9 +11,31 @@ function formatDateString(dateStr) {
 
 function getCompanyNameFrom(subjectName) : String
 {
-    console.log(subjectName);
     const subjectNameElementsSplitByDash = subjectName.split('-');
     return subjectNameElementsSplitByDash[1].trim();
 }
 
-export default {formatDateString, getCompanyNameFrom};
+function isASpecialCharacter(character) : Boolean
+{
+    const characterMap = 
+    {
+        '~': 1,
+        '|': 1,
+        '*': 1,
+        '-': 1,
+        '}': 1,
+        '{': 1,
+        '_': 1,
+        '#': 1,
+        '\\': 1,
+        '/': 1,
+        '(': 1,
+        ')': 1,
+        '.': 1,
+        ';': 1,
+    };
+
+    return characterMap[character];
+}
+
+export default {formatDateString, getCompanyNameFrom, isASpecialCharacter};

@@ -1,7 +1,10 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import LeprinoPurchaseOrderFactory from "../classes/leprinoPurchaseOrderFactory";
 import GlanbiaPurchaseOrderFactory from "../classes/glanbiaPurchaseOrderFactory";
-import HormelPurchaseOrderFactory from "../classes/hormelPuchaseOrderFactory";
+import HormelPurchaseOrderFactory from "../classes/hormelPurchaseOrderFactory";
+import JohnDeerePurchaseOrderFactory from "../classes/johnDeerePurchaseOrderFactory";
+import LouisianaPacificPurchaseOrderFactory from "../classes/louisianaPacificPurchaseOrderFactory";
+import RHPurchaseOrderFactory from "../classes/rhPurchaseOrderFactory";
 import PurchaseOrderHTML from "../classes/htmlBuilder";
 import helpers from "../helpers/helpers";
 import PurchaseOrderFactory from "../classes/purchaseOrderFactory";
@@ -15,6 +18,9 @@ function determineCompanyFactory(companyName, ediString)
         "LEPRINO": LeprinoPurchaseOrderFactory,
         "GLANBIA": GlanbiaPurchaseOrderFactory,
         "HORMEL": HormelPurchaseOrderFactory,
+		"LOUISIANA PACIFIC": LouisianaPacificPurchaseOrderFactory,
+		"R&H": RHPurchaseOrderFactory,
+		"JOHN DEERE NA":JohnDeerePurchaseOrderFactory
     }
 
 	if (factories[companyName])

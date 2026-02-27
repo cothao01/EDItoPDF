@@ -36,7 +36,7 @@ class PurchaseOrderHTML
         const orderInfo = this.purchaseOrder.getPurchaseOrder();   
         const orderType = orderInfo.orderType;
         
-    	if (orderType == OrderType.CHANGE)
+    	if (orderType == OrderType.CHANGE || orderType == OrderType.LEPRINO_CHANGE)
 	    {   
 	        this.orderAlert = `<div class="alert">
             *** POSSIBLE DUPLICATE PO# OR CHANGES TO EXISTING PO#, PLEASE CHECK ***

@@ -5,7 +5,7 @@ import helpers from "../helpers/helpers";
 
 const {formatDateString} = helpers;
 
-class GlanbiaPurchaseOrder extends PurchaseOrder
+class LouisianaPacificPurchaseOrder extends PurchaseOrder
 {
     getSegments() : Array<{}>
     {
@@ -19,12 +19,11 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
            this.itemInfos = this.createItemInfos("PO107", "PID05"); 
     }
 
-    // Glanbia has too many redundant messages, best to leave them out
     getMessages() : Array<{}>
     {
         return [{}];
     }
-    
+
     mapParties() : void
     {
         let n2Count = 0;
@@ -43,7 +42,6 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
             if (segmentName == "N2" && previousSegmentName != "N1")
             {
                 partyType = parties[n2Count];
-                console.log("Party Type: " + partyType);
                 this.stagePartyObject(i, partyType);            
             }
             else if (segmentName == "N1")
@@ -87,7 +85,7 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
             {
                 const orderLine = {
                     lineNumber: lineSegment[i][this.orderLineType + "01"],
-                    customerPartNumber :  parseInt(lineSegment[i][this.orderLineType + "09"]).toString(),
+                    customerPartNumber :  lineSegment[i][this.orderLineType + "09"],
                     qtyPerUOM :  `${lineSegment[i][this.orderLineType + "02"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     pricePerUOM :  `${lineSegment[i][this.orderLineType + "04"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     amount :  parseFloat(lineSegment[i][this.orderLineType + "04"]) * parseFloat(lineSegment[i][this.orderLineType + "02"]),
@@ -102,4 +100,4 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
     }
 }
 
-export default GlanbiaPurchaseOrder;
+export default LouisianaPacificPurchaseOrder;

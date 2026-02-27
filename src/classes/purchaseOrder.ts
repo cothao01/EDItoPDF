@@ -4,15 +4,14 @@ import helpers from "../helpers/helpers";
 import OrderInfo from "../interfaces/orderInfo";
 import OrderType from "../enums/enums";
 
-const {formatDateString} = helpers;
-
-const orderTypeOrderLineSegmentNames = ["POC", "PO1"];
+const {formatDateString, isASpecialCharacter} = helpers;
 
 class PurchaseOrder
 {
     poNumber    : Number;
     ediString   : String;
     orderType   : OrderType;
+    orderLineType   : String;
     poDate   : String = "";
     notes    : Array<{}>;
     segments    : Array<{}>;
@@ -20,13 +19,16 @@ class PurchaseOrder
     itemInfos : Array<ItemInfo> = [];
     parties     : {} = {};
     orderLines    : Array<LineInfo>;
+    delimiter : String;
 
     constructor(ediString)
     {
         this.ediString = ediString;
+        this.mapEDIDelimiter();
         this.segments = this.getSegments();
         this.mapParties();
         this.orderType = this.getOrderType();
+        this.mapOrderLineType();
         this.getPOLineGroup();        
         this.messages = this.getMessages();
         this.poNumber = this.getPONumber();
@@ -34,6 +36,33 @@ class PurchaseOrder
         this.notes = this.getNotes();
         this.orderLines = this.getOrderLines();
         this.mapItemInfos();
+    }
+
+    mapEDIDelimiter()
+    {
+        const characterCountObject = {};
+        let key = 'a';
+        let currentMax = {[key]: 0};
+
+        for (let i = 0; i < this.ediString.length; ++i)
+        {
+            if (!characterCountObject[this.ediString[i]] && 
+                isASpecialCharacter(this.ediString[i]))
+            {
+                characterCountObject[this.ediString[i]] = 1;
+            }
+            else
+            {
+                ++characterCountObject[this.ediString[i]];
+                if (characterCountObject[this.ediString[i]] > currentMax[[key][0]])
+                {
+                    const currentKey = this.ediString[i];
+                    currentMax = {[currentKey]: characterCountObject[this.ediString[i]]};
+                }
+            }
+        }
+
+        this.delimiter = Object.keys(currentMax)[0];
     }
 
     findSegment(segments, segmentID) : Array<{}>
@@ -60,8 +89,7 @@ class PurchaseOrder
     	while (segmentCharacterIndex < segment.length)
     	{
     		dataElement = segment[segmentCharacterIndex];
-    		
-    		if (dataElement == '*')
+    		if (dataElement == this.delimiter)
     		{
     			if (dataElementIndex == 0)
     			{
@@ -77,6 +105,7 @@ class PurchaseOrder
     			field = '';
     			continue;
     		};
+
 
     		field = field + segment[segmentCharacterIndex]
     		++segmentCharacterIndex;
@@ -145,22 +174,8 @@ class PurchaseOrder
 
     getPONumber() : Number
     {
-        let poNumber;
-
-        console.log("ORDER TYPE: " + this.orderType);
-        switch (this.orderType)
-        {
-            case OrderType.CHANGE:
-                poNumber = this.findSegment(this.segments, "BCH")[0]["BCH03"];
-                break;
-            case OrderType.NEW:
-                poNumber = this.findSegment(this.segments, "BEG")[0]["BEG03"];
-                break;
-            default:
-                poNumber = null;            
-        }
-
-        return poNumber        
+        let poNumber = this.findSegment(this.segments, "BEG")[0]["BEG03"];
+        return poNumber; 
     }
 
     mapPODate() : void
@@ -168,21 +183,34 @@ class PurchaseOrder
         const begSegment = this.findSegment(this.segments, "BEG")[0];
         if (begSegment && begSegment["BEG05"]) {
             this.poDate = formatDateString(begSegment["BEG05"]);
-        } else {
-            const bchSegment = this.findSegment(this.segments, "BCH")[0];
-            if (bchSegment && bchSegment["BCH06"]) {
-                this.poDate = formatDateString(bchSegment["BCH06"]);
-            } else {
-                this.poDate = "";
-            }
-        }
+        } 
     }
+
+    // Leprino is the only customer as of today that uses POC as the Order Line Type for
+    // Change Orders. Keeping it as NEW for everyone helps keep it consistent
+
+    mapOrderLineType() : void
+    {
+        switch(this.orderType)
+        {
+            case OrderType.NEW:
+                this.orderLineType = "PO1";
+                break;
+            case OrderType.CHANGE:
+                this.orderLineType = "PO1";
+                break;
+            case OrderType.LEPRINO_CHANGE:
+                this.orderLineType = "POC"
+        }
+    };
 
     getOrderType() : OrderType
     {
+        const poSegment = this.findSegment(this.segments, "BEG");
+
         const poSegmentLength = this.findSegment(this.segments, "BEG").length;
 
-        if (poSegmentLength < 1)
+        if (poSegmentLength < 1 || parseInt(poSegment[0]["BEG01"]) > 0)
         {
             return OrderType.CHANGE;
         }
@@ -209,7 +237,7 @@ class PurchaseOrder
     {
     // If not POC (change order), inject first PER segment into Buyer
 
-        if (this.orderType !== OrderType.CHANGE && this.parties["Buyer"]) {
+        if ((this.orderType !== OrderType.CHANGE || this.orderType as OrderType !== OrderType.LEPRINO_CHANGE) && this.parties["Buyer"]) {
             const perSegment = this.segments.find(seg => seg["segment"] === "PER");
         if (perSegment) {
             // Extract phone and email from PER segment
@@ -337,7 +365,7 @@ class PurchaseOrder
         {
             purchaseOrderLineSegmentName = newOrderLine;
         }
-        else if (this.orderType == OrderType.CHANGE)
+        else if (this.orderType == OrderType.CHANGE || this.orderType == OrderType.LEPRINO_CHANGE)
         {
             purchaseOrderLineSegmentName = changeOrderLine;
         }; 
@@ -362,7 +390,8 @@ class PurchaseOrder
         for (let i = 0; i < this.notes.length; i++) 
         {
             const itemDescription = this.notes[i][segmentPositionPID];
-            const itemNumber = this.findSegment(this.segments, this.orderType)[0][segmentPositionPO];
+            const itemNumber = this.findSegment(this.segments, this.orderLineType)[0][segmentPositionPO];
+
             const itemInfo = this.createItemInfo(itemNumber, itemDescription);
 
             stagedItemInfos.push(itemInfo); 
@@ -380,18 +409,18 @@ class PurchaseOrder
     {
         const orderLines : Array<LineInfo> = [];
 
-        if (this.orderType == OrderType.CHANGE) 
+        if (this.orderType & (OrderType.CHANGE | OrderType.LEPRINO_CHANGE)) 
         {    
-            const lineSegment = this.findSegment(this.segments, this.orderType);
+            const lineSegment = this.findSegment(this.segments, this.orderLineType);
 
             for (let i = 0; i < lineSegment.length; ++i)
             {
                 const orderLine = {
-                    lineNumber: lineSegment[i][this.orderType + "01"],
-                    customerPartNumber :  lineSegment[i][this.orderType + "09"],
-                    qtyPerUOM :  `${lineSegment[i][this.orderType + "03"]}/${lineSegment[i][this.orderType + "05"]}`,
-                    pricePerUOM :  `${lineSegment[i][this.orderType + "06"]}/${lineSegment[i][this.orderType + "05"]}`,
-                    amount :  parseFloat(lineSegment[i][this.orderType + "03"]) * parseFloat(lineSegment[i][this.orderType + "06"]),
+                    lineNumber: lineSegment[i][this.orderLineType + "01"],
+                    customerPartNumber :  lineSegment[i][this.orderLineType + "09"],
+                    qtyPerUOM :  `${lineSegment[i][this.orderLineType + "03"]}/${lineSegment[i][this.orderLineType + "05"]}`,
+                    pricePerUOM :  `${lineSegment[i][this.orderLineType + "06"]}/${lineSegment[i][this.orderLineType + "05"]}`,
+                    amount :  parseFloat(lineSegment[i][this.orderLineType + "03"]) * parseFloat(lineSegment[i][this.orderLineType + "06"]),
                     deliveryDate:  this.getRequiredDeliveryDate()} as LineInfo;
 
                 orderLines.push(orderLine);
@@ -399,16 +428,17 @@ class PurchaseOrder
         }
         else
         {
-            const lineSegment = this.findSegment(this.segments, this.orderType);
+            const lineSegment = this.findSegment(this.segments, this.orderLineType);
 
             for (let i = 0; i < lineSegment.length; ++i)
             {
+                console.log("Order Line Type: " + this.orderLineType);
                 const orderLine = {
-                    lineNumber: lineSegment[i][this.orderType + "01"],
-                    customerPartNumber :  lineSegment[i][this.orderType + "07"],
-                    qtyPerUOM :  `${lineSegment[i][this.orderType + "02"]}/${lineSegment[i][this.orderType + "03"]}`,
-                    pricePerUOM :  `${lineSegment[i][this.orderType + "04"]}/${lineSegment[i][this.orderType + "03"]}`,
-                    amount :  parseFloat(lineSegment[i][this.orderType + "04"]) * parseFloat(lineSegment[i][this.orderType + "02"]),
+                    lineNumber: lineSegment[i][this.orderLineType + "01"],
+                    customerPartNumber :  lineSegment[i][this.orderLineType + "07"],
+                    qtyPerUOM :  `${lineSegment[i][this.orderLineType + "02"]}/${lineSegment[i][this.orderLineType + "03"]}`,
+                    pricePerUOM :  `${lineSegment[i][this.orderLineType + "04"]}/${lineSegment[i][this.orderLineType + "03"]}`,
+                    amount :  parseFloat(lineSegment[i][this.orderLineType + "04"]) * parseFloat(lineSegment[i][this.orderLineType + "02"]),
                     deliveryDate:  formatDateString(this.getRequiredDeliveryDate())} as LineInfo;
 
                 orderLines.push(orderLine);
@@ -425,14 +455,13 @@ class PurchaseOrder
         {
             const segmentName = this.segments[i]["segment"];
 
-            if (segmentName == this.orderType)
+            if (segmentName == this.orderLineType)
             {
                 let segmentIndex = i;
                 while (this.segments[segmentIndex]["segment"] != "SCH" && 
                     this.segments[segmentIndex + 1] != undefined
                 )
                 {
-                    console.log("SEGMENT " + this.orderType + ": " + this.segments[segmentIndex]["segment"]);
                     ++segmentIndex;
                 }      
             }
