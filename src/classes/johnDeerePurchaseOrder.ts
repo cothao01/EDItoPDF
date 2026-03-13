@@ -14,6 +14,10 @@ class JohnDeerePurchaseOrder extends PurchaseOrder
         return cleanedSegments;
     }
 
+    getMessages() : Array<{}>
+    {
+        return [];
+    }
     mapItemInfos() : void
     {    
            this.itemInfos = this.createItemInfos("PO107", "PID05"); 

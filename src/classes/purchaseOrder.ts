@@ -4,7 +4,7 @@ import helpers from "../helpers/helpers";
 import OrderInfo from "../interfaces/orderInfo";
 import OrderType from "../enums/enums";
 
-const {formatDateString, isASpecialCharacter} = helpers;
+const {normalizeId, formatDateString, isASpecialCharacter} = helpers;
 
 class PurchaseOrder
 {
@@ -20,6 +20,7 @@ class PurchaseOrder
     parties     : {} = {};
     orderLines    : Array<LineInfo>;
     delimiter : String;
+    orderLineLength : number;
 
     constructor(ediString)
     {
@@ -29,6 +30,7 @@ class PurchaseOrder
         this.mapParties();
         this.orderType = this.getOrderType();
         this.mapOrderLineType();
+        this.orderLineLength = this.getOrderLineLength();
         this.getPOLineGroup();        
         this.messages = this.getMessages();
         this.poNumber = this.getPONumber();
@@ -37,6 +39,8 @@ class PurchaseOrder
         this.orderLines = this.getOrderLines();
         this.mapItemInfos();
     }
+
+    
 
     mapEDIDelimiter()
     {
@@ -63,6 +67,7 @@ class PurchaseOrder
         }
 
         this.delimiter = Object.keys(currentMax)[0];
+        console.log("DELIMITER: " + this.delimiter);
     }
 
     findSegment(segments, segmentID) : Array<{}>
@@ -141,11 +146,12 @@ class PurchaseOrder
 
     getCleanedEDISegmentsFrom(ediSegments) : Array<{}>
     {
+        console.log("EDI SEGMENTS DIRTY: " + ediSegments);
         const cleanedSegments = [];
         for (let segment of ediSegments)
 	    {
 		    const segmentInfo = this.parseEDISegment(segment);
-
+            console.log("SEGMENT INFO: " + JSON.stringify(segmentInfo));
     		cleanedSegments.push(segmentInfo);
 	    }
 	
@@ -174,6 +180,7 @@ class PurchaseOrder
 
     getPONumber() : Number
     {
+        console.log("SEGMENTS: " + JSON.stringify(this.segments));
         let poNumber = this.findSegment(this.segments, "BEG")[0]["BEG03"];
         return poNumber; 
     }
@@ -333,6 +340,11 @@ class PurchaseOrder
             }
         }
 
+        if (!this.parties["Buyer"])
+        {
+            this.parties["Buyer"] = this.findSegment(this.segments, "PER")[0];
+        }
+        console.log("PARTIES MAPPED: " + JSON.stringify(this.parties)); 
         this.cleanPartyInfo();
     }
 
@@ -356,6 +368,12 @@ class PurchaseOrder
     getNotes() : Array<{}>
     {
         return this.findSegment(this.segments, "PID");
+    }
+
+    getOrderLineLength() : number
+    {
+        console.log("ORDER LINES: " + JSON.stringify(this.findSegment(this.segments, this.orderLineType))); 
+        return this.findSegment(this.segments, this.orderLineType).length; 
     }
 
     determineChangeOrNewOrderLine(newOrderLine, changeOrderLine)
@@ -397,6 +415,13 @@ class PurchaseOrder
             stagedItemInfos.push(itemInfo); 
         }
 
+        for (let j = 0; j < this.orderLineLength; j++)
+        {
+            const itemNumber = this.findSegment(this.segments, this.orderLineType)[j][segmentPositionPO];
+            const itemInfo = this.createItemInfo(itemNumber, null);
+            stagedItemInfos.push(itemInfo);
+        }
+
         return stagedItemInfos;
     }
 
@@ -417,7 +442,7 @@ class PurchaseOrder
             {
                 const orderLine = {
                     lineNumber: lineSegment[i][this.orderLineType + "01"],
-                    customerPartNumber :  lineSegment[i][this.orderLineType + "09"],
+                    customerPartNumber :  normalizeId(lineSegment[i][this.orderLineType + "09"]),
                     qtyPerUOM :  `${lineSegment[i][this.orderLineType + "03"]}/${lineSegment[i][this.orderLineType + "05"]}`,
                     pricePerUOM :  `${lineSegment[i][this.orderLineType + "06"]}/${lineSegment[i][this.orderLineType + "05"]}`,
                     amount :  parseFloat(lineSegment[i][this.orderLineType + "03"]) * parseFloat(lineSegment[i][this.orderLineType + "06"]),
@@ -435,7 +460,7 @@ class PurchaseOrder
                 console.log("Order Line Type: " + this.orderLineType);
                 const orderLine = {
                     lineNumber: lineSegment[i][this.orderLineType + "01"],
-                    customerPartNumber :  lineSegment[i][this.orderLineType + "07"],
+                    customerPartNumber :  normalizeId(lineSegment[i][this.orderLineType + "07"]),
                     qtyPerUOM :  `${lineSegment[i][this.orderLineType + "02"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     pricePerUOM :  `${lineSegment[i][this.orderLineType + "04"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     amount :  parseFloat(lineSegment[i][this.orderLineType + "04"]) * parseFloat(lineSegment[i][this.orderLineType + "02"]),

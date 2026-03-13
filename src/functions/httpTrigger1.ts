@@ -5,11 +5,15 @@ import HormelPurchaseOrderFactory from "../classes/hormelPurchaseOrderFactory";
 import JohnDeerePurchaseOrderFactory from "../classes/johnDeerePurchaseOrderFactory";
 import LouisianaPacificPurchaseOrderFactory from "../classes/louisianaPacificPurchaseOrderFactory";
 import RHPurchaseOrderFactory from "../classes/rhPurchaseOrderFactory";
+import RocklinePurchaseOrderFactory from "../classes/rocklinePurchaseOrderFactory";
+import KrogerPurchaseOrderFactory from "../classes/krogerPurchaseOrderFactory";
+import LandOLakesPurchaseOrderFactory from "../classes/lolPurchaseOrderFactory";
+import ThreeMPurchaseOrderFactory from "../classes/threemPurchaseOrderFactory";
 import PurchaseOrderHTML from "../classes/htmlBuilder";
 import helpers from "../helpers/helpers";
 import PurchaseOrderFactory from "../classes/purchaseOrderFactory";
 
-const {getCompanyNameFrom} = helpers;
+const {getCustomerNumberFrom, transformSubjectNameFrom, splitEdiByPurchaseOrder, getCompanyNameFrom} = helpers;
 
 function determineCompanyFactory(companyName, ediString)
 {
@@ -20,6 +24,10 @@ function determineCompanyFactory(companyName, ediString)
         "HORMEL": HormelPurchaseOrderFactory,
 		"LOUISIANA PACIFIC": LouisianaPacificPurchaseOrderFactory,
 		"R&H": RHPurchaseOrderFactory,
+		"ROCKLINE": RocklinePurchaseOrderFactory,
+		"THREEM": ThreeMPurchaseOrderFactory,
+		"KROGER":KrogerPurchaseOrderFactory,
+		"LANDOLAKES":LandOLakesPurchaseOrderFactory,
 		"JOHN DEERE NA":JohnDeerePurchaseOrderFactory
     }
 
@@ -29,7 +37,8 @@ function determineCompanyFactory(companyName, ediString)
 	}
 	else
 	{
-		return new PurchaseOrderFactory(ediString);
+		// RH seems to fit most cases; I'll switch the parent logic to represent this eventually
+		return new RHPurchaseOrderFactory(ediString);
 	}
 }
 
@@ -39,17 +48,34 @@ export async function httpTrigger1(request: HttpRequest, context: InvocationCont
 	const subjectName = request.params["SubjectName"];
 	const companyName = getCompanyNameFrom(subjectName);
 
-	console.log("COMPANYNAME: " + companyName, "LENGTH: " + companyName.length);
-
 	context.log(`Http function processed request for url "${request.url}"`);
-   
-	const factory = determineCompanyFactory(companyName, atob(atob(attachments)));
+	context.log(`Logging attachments: "${atob(atob(attachments))}"`);
+	
+	const purchaseOrders = splitEdiByPurchaseOrder(atob(atob(attachments)));
 
-	const pdf = new PurchaseOrderHTML(factory);
+	let purchaseOrderHTML = [];
+	let subjectNames = [];
 
-	const html = pdf.purchaseOrderHTML;
+	context.log("Processing orders...\n");
 
-	return { body: html};
+	for (let i = 0; i < purchaseOrders.length; ++i)
+	{
+		context.log("Purchase Orders: ", purchaseOrders);
+		const factory = determineCompanyFactory(companyName, purchaseOrders[i]);
+
+		const pdf = new PurchaseOrderHTML(factory);
+
+		const customerNumber = getCustomerNumberFrom(subjectName, companyName, pdf.purchaseOrder.orderType);
+
+		const fixedSubjectName = transformSubjectNameFrom(subjectName, pdf.purchaseOrder.orderType, pdf.purchaseOrder.poNumber, customerNumber);
+
+		purchaseOrderHTML.push(pdf.purchaseOrderHTML);
+		subjectNames.push(fixedSubjectName);
+	}
+	context.log("HTML: " + JSON.stringify(purchaseOrderHTML));
+
+
+	return { body: JSON.stringify({"POS": purchaseOrderHTML, "SubjectNames": subjectNames})};
 };
 
 app.http('httpTrigger1', {

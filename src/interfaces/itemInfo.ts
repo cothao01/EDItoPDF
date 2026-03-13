@@ -1,7 +1,7 @@
 interface ItemInfo
 {
-    itemNumber : String,
-    itemDescription : String
+    itemNumber : string,
+    itemDescription : string
 }
 
 export default ItemInfo;

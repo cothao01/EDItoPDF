@@ -77,13 +77,30 @@ class PurchaseOrderHTML
         const orderInfo = this.purchaseOrder.getPurchaseOrder();
         const itemInfos = orderInfo.itemInfos;
             
-        const itemInfosHtml = `<ul>${itemInfos.map(item => 
-        {
-            return `${item.itemNumber ? `<li>${item.itemNumber}</li>` : ''}
-            ${item.itemDescription ? `<li>${item.itemDescription}</li>` : ''}`
-        }).join('')}</ul>`;
+        const usedItems = {};
+        const usedItemDesc = {};
 
-        console.log("HTMNL: " + itemInfosHtml);
+        let itemInfosHtml = `<ul>`;
+
+        for (let i = 0; i < itemInfos.length; i++)
+        {
+          const item = itemInfos[i];
+
+          if (!usedItems[item.itemNumber])
+          {
+            itemInfosHtml += `${item.itemNumber ? `<li>${item.itemNumber}</li>` : ''}`;
+            usedItems[item.itemNumber] = 1;
+          }
+
+          if (!usedItemDesc[item.itemDescription])
+          {
+            itemInfosHtml += `${item.itemDescription ? `<li>${item.itemDescription}</li>` : ''}`;
+            usedItems[item.itemDescription] = 1;
+          }
+
+        }
+        
+        itemInfosHtml += `</ul>`;
 
         return itemInfosHtml;
     }
@@ -220,7 +237,7 @@ ${this.orderAlert}
 
   <!-- Order Info -->
   <div class="horizontal-fields">
-    <div>Order Type: ${this.orderInfo.orderType}</div>
+    <div>Order Type: ${this.orderInfo.orderType & (OrderType.CHANGE | OrderType.LEPRINO_CHANGE) ? "CHANGE ORDER" : "NEW ORDER"}</div>
     <div>
       PO Date: ${this.orderInfo.poDate}
     </div>

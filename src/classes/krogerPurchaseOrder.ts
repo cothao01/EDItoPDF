@@ -5,7 +5,7 @@ import helpers from "../helpers/helpers";
 
 const {formatDateString} = helpers;
 
-class LouisianaPacificPurchaseOrder extends PurchaseOrder
+class KrogerPurchaseOrder extends PurchaseOrder
 {
     getSegments() : Array<{}>
     {
@@ -17,11 +17,6 @@ class LouisianaPacificPurchaseOrder extends PurchaseOrder
     mapItemInfos() : void
     {    
            this.itemInfos = this.createItemInfos("PO107", "PID05"); 
-    }
-
-    getMessages() : Array<{}>
-    {
-        return [{}];
     }
 
     mapParties() : void
@@ -42,6 +37,7 @@ class LouisianaPacificPurchaseOrder extends PurchaseOrder
             if (segmentName == "N2" && previousSegmentName != "N1")
             {
                 partyType = parties[n2Count];
+                console.log("Party Type: " + partyType);
                 this.stagePartyObject(i, partyType);            
             }
             else if (segmentName == "N1")
@@ -51,11 +47,6 @@ class LouisianaPacificPurchaseOrder extends PurchaseOrder
     		}
 
     	}
-
-        if (!this.parties["Buyer"])
-        {
-            this.parties["Buyer"] = this.findSegment(this.segments, "PER")[0];
-        }
 
         this.cleanPartyInfo();
     }    
@@ -73,7 +64,7 @@ class LouisianaPacificPurchaseOrder extends PurchaseOrder
             {
                 const orderLine = {
                     lineNumber: lineSegment[i][this.orderLineType + "01"],
-                    customerPartNumber :  lineSegment[i][this.orderLineType + "09"],
+                    customerPartNumber :  lineSegment[i][this.orderLineType + "07"],
                     qtyPerUOM :  `${lineSegment[i][this.orderLineType + "02"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     pricePerUOM :  `${lineSegment[i][this.orderLineType + "04"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     amount :  parseFloat(lineSegment[i][this.orderLineType + "04"]) * parseFloat(lineSegment[i][this.orderLineType + "02"]),
@@ -90,7 +81,7 @@ class LouisianaPacificPurchaseOrder extends PurchaseOrder
             {
                 const orderLine = {
                     lineNumber: lineSegment[i][this.orderLineType + "01"],
-                    customerPartNumber :  lineSegment[i][this.orderLineType + "09"],
+                    customerPartNumber :  lineSegment[i][this.orderLineType + "07"],
                     qtyPerUOM :  `${lineSegment[i][this.orderLineType + "02"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     pricePerUOM :  `${lineSegment[i][this.orderLineType + "04"]}/${lineSegment[i][this.orderLineType + "03"]}`,
                     amount :  parseFloat(lineSegment[i][this.orderLineType + "04"]) * parseFloat(lineSegment[i][this.orderLineType + "02"]),
@@ -105,4 +96,4 @@ class LouisianaPacificPurchaseOrder extends PurchaseOrder
     }
 }
 
-export default LouisianaPacificPurchaseOrder;
+export default KrogerPurchaseOrder;
