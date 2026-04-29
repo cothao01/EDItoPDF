@@ -21,7 +21,7 @@ class ThreeMPurchaseOrder extends PurchaseOrder
  
     mapItemInfos() : void
     {    
-           this.itemInfos = this.createItemInfos("PO107", "PID05"); 
+           this.itemInfos = this.createItemInfos("PO107", null,"PID05"); 
     }
 
     mapParties() : void

@@ -19,7 +19,7 @@ class PurchaseOrder
     itemInfos : Array<ItemInfo> = [];
     parties     : {} = {};
     orderLines    : Array<LineInfo>;
-    delimiter : String;
+    delimiter : string;
     orderLineLength : number;
 
     constructor(ediString)
@@ -67,7 +67,6 @@ class PurchaseOrder
         }
 
         this.delimiter = Object.keys(currentMax)[0];
-        console.log("DELIMITER: " + this.delimiter);
     }
 
     findSegment(segments, segmentID) : Array<{}>
@@ -140,18 +139,16 @@ class PurchaseOrder
 		    ++fieldCounter;
 		    ++nextSegmentInSequence;
 	    }
-
+        
     	return fieldCounter;
     }
 
     getCleanedEDISegmentsFrom(ediSegments) : Array<{}>
     {
-        console.log("EDI SEGMENTS DIRTY: " + ediSegments);
         const cleanedSegments = [];
         for (let segment of ediSegments)
 	    {
 		    const segmentInfo = this.parseEDISegment(segment);
-            console.log("SEGMENT INFO: " + JSON.stringify(segmentInfo));
     		cleanedSegments.push(segmentInfo);
 	    }
 	
@@ -180,7 +177,6 @@ class PurchaseOrder
 
     getPONumber() : Number
     {
-        console.log("SEGMENTS: " + JSON.stringify(this.segments));
         let poNumber = this.findSegment(this.segments, "BEG")[0]["BEG03"];
         return poNumber; 
     }
@@ -306,7 +302,6 @@ class PurchaseOrder
                             address += this.parties[party][index][info] + ' ';
                         }
                     }
-                    console.log(infoElement);
                 }
             }
             this.parties[party][index] = address;
@@ -344,7 +339,6 @@ class PurchaseOrder
         {
             this.parties["Buyer"] = this.findSegment(this.segments, "PER")[0];
         }
-        console.log("PARTIES MAPPED: " + JSON.stringify(this.parties)); 
         this.cleanPartyInfo();
     }
 
@@ -372,7 +366,6 @@ class PurchaseOrder
 
     getOrderLineLength() : number
     {
-        console.log("ORDER LINES: " + JSON.stringify(this.findSegment(this.segments, this.orderLineType))); 
         return this.findSegment(this.segments, this.orderLineType).length; 
     }
 
@@ -394,7 +387,7 @@ class PurchaseOrder
     mapItemInfos() : void
     {    
         let purchaseOrderLineSegmentName = this.determineChangeOrNewOrderLine("PO1013", "POC011");
-        this.itemInfos = this.createItemInfos(purchaseOrderLineSegmentName, "PID05"); 
+        this.itemInfos = this.createItemInfos(purchaseOrderLineSegmentName, null,"PID05"); 
     }
 
     mapItemNumbers()
@@ -402,32 +395,43 @@ class PurchaseOrder
         //this.findSegment(this.segments, );
     }
 
-    createItemInfos(segmentPositionPO, segmentPositionPID) : Array<ItemInfo>
+    createItemInfos(segmentPositionPO, segmentPositionPO2, segmentPositionPID) : Array<ItemInfo>
     {
         const stagedItemInfos : Array<ItemInfo> = [];
+        const itemNumberSet = new Set();
+        const itemDescriptionSet = new Set();
+        const cleanedItemInfos : Array<ItemInfo> = [];
+
         for (let i = 0; i < this.notes.length; i++) 
         {
             const itemDescription = this.notes[i][segmentPositionPID];
-            const itemNumber = this.findSegment(this.segments, this.orderLineType)[0][segmentPositionPO];
+            let itemNumber = this.findSegment(this.segments, this.orderLineType)[0][segmentPositionPO];
+            let itemNumber2 = this.findSegment(this.segments, this.orderLineType)[0][segmentPositionPO2];
 
-            const itemInfo = this.createItemInfo(itemNumber, itemDescription);
+            const itemInfo = this.createItemInfo(itemNumber, itemNumber2, itemDescription);
 
             stagedItemInfos.push(itemInfo); 
+
+            itemNumberSet.add(itemNumber);
+            itemDescriptionSet.add(itemDescription);
         }
 
         for (let j = 0; j < this.orderLineLength; j++)
         {
             const itemNumber = this.findSegment(this.segments, this.orderLineType)[j][segmentPositionPO];
-            const itemInfo = this.createItemInfo(itemNumber, null);
+            const itemNumber2 = this.findSegment(this.segments, this.orderLineType)[j][segmentPositionPO2];
+            const itemInfo = this.createItemInfo(itemNumber, itemNumber2, null);
             stagedItemInfos.push(itemInfo);
+            itemNumberSet.add(itemNumber);
         }
+
 
         return stagedItemInfos;
     }
 
-    createItemInfo(itemNumber, itemDescription) : ItemInfo
+    createItemInfo(itemNumber, itemNumber2, itemDescription) : ItemInfo
     {
-        return {itemNumber: itemNumber, itemDescription: itemDescription} as ItemInfo;
+        return {itemNumber: itemNumber, itemNumber2: itemNumber2, itemDescription: itemDescription} as ItemInfo;
     }
 
     getOrderLines() : Array<LineInfo>
@@ -457,7 +461,6 @@ class PurchaseOrder
 
             for (let i = 0; i < lineSegment.length; ++i)
             {
-                console.log("Order Line Type: " + this.orderLineType);
                 const orderLine = {
                     lineNumber: lineSegment[i][this.orderLineType + "01"],
                     customerPartNumber :  normalizeId(lineSegment[i][this.orderLineType + "07"]),

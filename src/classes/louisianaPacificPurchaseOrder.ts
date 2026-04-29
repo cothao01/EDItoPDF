@@ -9,14 +9,23 @@ class LouisianaPacificPurchaseOrder extends PurchaseOrder
 {
     getSegments() : Array<{}>
     {
-        const ediSegments = this.ediString.split('~');
-        const cleanedSegments = this.getCleanedEDISegmentsFrom(ediSegments);
+        let ediSegments = this.ediString.split('~');
+        let ediSegments2 = this.ediString.split('\n');
+        let chosenSegments = ediSegments;
+
+        if (ediSegments2.length > ediSegments.length)
+        {
+            chosenSegments = ediSegments2;
+        }
+
+        const cleanedSegments = this.getCleanedEDISegmentsFrom(chosenSegments);
+
         return cleanedSegments;
     }
 
     mapItemInfos() : void
     {    
-           this.itemInfos = this.createItemInfos("PO107", "PID05"); 
+           this.itemInfos = this.createItemInfos("PO107", null, "PID05"); 
     }
 
     getMessages() : Array<{}>

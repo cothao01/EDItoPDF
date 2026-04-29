@@ -44,6 +44,7 @@ function determineCompanyFactory(companyName, ediString)
 
 export async function httpTrigger1(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> 
 {
+	context.log("Request: " + JSON.stringify(request));
 	const attachments = request.params["Attachments"];
 	const subjectName = request.params["SubjectName"];
 	const companyName = getCompanyNameFrom(subjectName);
@@ -52,9 +53,11 @@ export async function httpTrigger1(request: HttpRequest, context: InvocationCont
 	context.log(`Logging attachments: "${atob(atob(attachments))}"`);
 	
 	const purchaseOrders = splitEdiByPurchaseOrder(atob(atob(attachments)));
+	context.log("Purchase orders: " + JSON.stringify(purchaseOrders));
 
 	let purchaseOrderHTML = [];
 	let subjectNames = [];
+	let pdf = {} as PurchaseOrderHTML;
 
 	context.log("Processing orders...\n");
 
@@ -63,19 +66,31 @@ export async function httpTrigger1(request: HttpRequest, context: InvocationCont
 		context.log("Purchase Orders: ", purchaseOrders);
 		const factory = determineCompanyFactory(companyName, purchaseOrders[i]);
 
-		const pdf = new PurchaseOrderHTML(factory);
+		const [pdf1, pdf2] = await [await new PurchaseOrderHTML(factory), await new PurchaseOrderHTML(factory)];
 
-		const customerNumber = getCustomerNumberFrom(subjectName, companyName, pdf.purchaseOrder.orderType);
+		const customerNumber = getCustomerNumberFrom(subjectName, companyName, pdf1.purchaseOrder.orderType);
 
-		const fixedSubjectName = transformSubjectNameFrom(subjectName, pdf.purchaseOrder.orderType, pdf.purchaseOrder.poNumber, customerNumber);
+		const fixedSubjectName = transformSubjectNameFrom(subjectName, pdf1.purchaseOrder.orderType, pdf1.purchaseOrder.poNumber, customerNumber);
 
-		purchaseOrderHTML.push(pdf.purchaseOrderHTML);
+		if (pdf1.purchaseOrderHTML.toString().length > pdf2.purchaseOrderHTML.toString().length)
+		{
+			purchaseOrderHTML.push(pdf1.purchaseOrderHTML);
+		}
+		else
+		{
+			purchaseOrderHTML.push(pdf2.purchaseOrderHTML);
+		}
+
 		subjectNames.push(fixedSubjectName);
+
+		pdf = pdf1;
 	}
 	context.log("HTML: " + JSON.stringify(purchaseOrderHTML));
 
 
-	return { body: JSON.stringify({"POS": purchaseOrderHTML, "SubjectNames": subjectNames})};
+	//return { body: JSON.stringify({"POS": purchaseOrderHTML, "SubjectNames": subjectNames})};
+	//return { body: purchaseOrderHTML};
+	return {body: pdf.toPDF()}
 };
 
 app.http('httpTrigger1', {

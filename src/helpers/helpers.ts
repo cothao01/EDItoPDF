@@ -16,8 +16,21 @@ function splitEdiByPurchaseOrder(ediString) : Array<String>
     const parts = ediString
     .split(/(?=BEG\})/g)   // split at positions right before "BEG}"
     .filter(p => p.startsWith("BEG}")); // remove header chunk before first BEG, if any
-    if (parts.length < 2) return [ediString];
-    return parts;
+
+    const parts2 = ediString
+    .split(/(?=BEG\*)/g)   // split at positions right before "BEG}"
+    .filter(p => p.startsWith("BEG*")); // remove header chunk before first BEG, if any
+
+    let choseParts = parts;
+
+    if (parts.length < parts2.length)
+    {
+        choseParts = parts2;
+    }
+
+    if (choseParts.length < 2) return [ediString];
+ 
+    return choseParts;
 }
 
 function getCompanyNameFrom(subjectName) : String
@@ -48,7 +61,7 @@ function transformSubjectNameFrom(subjectName, orderType, poNumber, customerNumb
     }
     else
     {
-       subjectNameElementsSplitByDash[0] = "CHANGE"; 
+       subjectNameElementsSplitByDash[0] = "NEW"; 
     }
 
     subjectNameElementsSplitByDash[2] = `PO# ${poNumber}`;

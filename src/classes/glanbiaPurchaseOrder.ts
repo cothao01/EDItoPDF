@@ -2,6 +2,7 @@ import PurchaseOrder from "./purchaseOrder";
 import LineInfo from "../interfaces/lineInfo";
 import OrderType from "../enums/enums";
 import helpers from "../helpers/helpers";
+import ItemInfo from "../interfaces/itemInfo";
 
 const {formatDateString} = helpers;
 
@@ -9,10 +10,59 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
 {
     getSegments() : Array<{}>
     {
-        const ediSegments = this.ediString.split('~');
-        const cleanedSegments = this.getCleanedEDISegmentsFrom(ediSegments);
+
+        let ediSegments = this.ediString.split('~');
+        
+        let cleanedSegments = this.getCleanedEDISegmentsFrom(ediSegments);
+        if (Object.keys(cleanedSegments[0])[0] == "undefined00")
+        {
+            ediSegments = this.ediString.split('^');
+            cleanedSegments = this.getCleanedEDISegmentsFrom(ediSegments);
+        };
         return cleanedSegments;
     }
+
+    createItemInfos(segmentPositionPO, segmentPositionPID) : Array<ItemInfo>
+    {
+        const stagedItemInfos : Array<ItemInfo> = [];
+        const cleanedItemInfos : Array<ItemInfo> = [];
+        const itemsItemInfo : Array<ItemInfo> = [];
+
+        for (let i = 0; i < this.notes.length; i++) 
+        {
+            const itemDescription = this.notes[i][segmentPositionPID];
+            const itemNumber = this.findSegment(this.segments, this.orderLineType)[0][segmentPositionPO];
+
+            const itemInfo = this.createItemInfo(itemNumber, null,itemDescription);
+
+            stagedItemInfos.push(itemInfo); 
+        }
+
+        for (let j = 0; j < this.orderLineLength; j++)
+        {
+            const itemNumber = this.findSegment(this.segments, this.orderLineType)[j][segmentPositionPO];
+            const itemInfo = this.createItemInfo(itemNumber, null, null);
+            itemsItemInfo.push(itemInfo);
+        }
+
+        let itemNumberIndex = 0;
+        console.log("ITEM NUMBER SIZE: " + itemsItemInfo.length);
+        for(let k = 0; k < stagedItemInfos.length; k++)
+        {
+            if (stagedItemInfos[k].itemDescription)
+            {
+                cleanedItemInfos.push(this.createItemInfo(
+                    itemsItemInfo[itemNumberIndex].itemNumber, 
+                    null,
+                    stagedItemInfos[k].itemDescription))
+                    
+                ++itemNumberIndex;
+            }
+        }
+
+        return cleanedItemInfos;
+    }
+
 
     mapItemInfos() : void
     {    
@@ -28,36 +78,48 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
     mapParties() : void
     {
         let n2Count = 0;
-
+        let shipToMapped = false;
         const parties = 
         {
             0 : "ST"
         }
 
-    	for (let i = 1; i < this.segments.length; ++i)
+    	for (let i = 2; i < this.segments.length; ++i)
     	{
     		const segmentName = this.segments[i]["segment"];
-    		const previousSegmentName = this.segments[i - 1]["segment"];
+
             let partyType;
 
-            if (segmentName == "N2" && previousSegmentName != "N1")
+            if (this.isCommonPartyIdentifier(segmentName) || segmentName == "N1")
             {
-                partyType = parties[n2Count];
-                console.log("Party Type: " + partyType);
-                this.stagePartyObject(i, partyType);            
+         		const previousSegmentName = this.segments[i - 1]["segment"];
+        		const skipPreviousSegmentName = this.segments[i - 2]["segment"];
+        		const nextSegmentName = this.segments[i+1]["segment"];
+           
+                if ((segmentName == "N2" && previousSegmentName != "N1") ||
+                    (segmentName == "N3" && previousSegmentName !== "N2" && (skipPreviousSegmentName != "N1" || nextSegmentName == "N4")
+                ) && !shipToMapped
+            )
+                {
+                    partyType = parties[n2Count];
+                    console.log("Party Type: " + partyType);
+                    this.stagePartyObject(i, partyType);            
+                    shipToMapped = true;
+                }
+                else if (segmentName == "N1")
+    		    {
+                    partyType = this.segments[i]["N101"];
+                    this.stagePartyObject(i, partyType);            
+    		    }
             }
-            else if (segmentName == "N1")
-    		{
-                partyType = this.segments[i]["N101"];
-                this.stagePartyObject(i, partyType);            
-    		}
-
     	}
         if (!this.parties["Buyer"])
         {
             this.parties["Buyer"] = this.findSegment(this.segments, "PER")[0];
         }
+        console.log("PARITES HERE: " + JSON.stringify(this.parties));
         this.cleanPartyInfo();
+
     }    
     
     getOrderLines() : Array<LineInfo>

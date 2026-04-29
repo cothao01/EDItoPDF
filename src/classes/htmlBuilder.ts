@@ -3,6 +3,7 @@ import PurchaseOrder from "./purchaseOrder";
 import OrderInfo from "../interfaces/orderInfo";
 import OrderType from "../enums/enums";
 import type {BodyInit} from "undici";
+import puppeteer from "puppeteer";
 
 class PurchaseOrderHTML
 {
@@ -72,36 +73,30 @@ class PurchaseOrderHTML
 	    }
     }
 
-    buildItemInfos() : String
+    buildItemInfos(lineNumber : number) : String
     {
         const orderInfo = this.purchaseOrder.getPurchaseOrder();
         const itemInfos = orderInfo.itemInfos;
             
+        console.log("ITEM INFOS: " + JSON.stringify(itemInfos));
         const usedItems = {};
-        const usedItemDesc = {};
 
         let itemInfosHtml = `<ul>`;
 
-        for (let i = 0; i < itemInfos.length; i++)
-        {
-          const item = itemInfos[i];
+        let item = itemInfos[lineNumber];
 
-          if (!usedItems[item.itemNumber])
-          {
-            itemInfosHtml += `${item.itemNumber ? `<li>${item.itemNumber}</li>` : ''}`;
-            usedItems[item.itemNumber] = 1;
-          }
+        console.log("CURRENT ITEM: " + JSON.stringify(item));
 
-          if (!usedItemDesc[item.itemDescription])
-          {
-            itemInfosHtml += `${item.itemDescription ? `<li>${item.itemDescription}</li>` : ''}`;
-            usedItems[item.itemDescription] = 1;
-          }
+        itemInfosHtml += `${item.itemNumber ? `<li>Manufacturer Part: ${item.itemNumber}</li>` : ''}`;
+        usedItems[item.itemNumber] = 1;
 
-        }
+        itemInfosHtml += `${item.itemNumber2 ? `<li>Vendor Part: ${item.itemNumber2}</li>` : ''}`;
+        usedItems[item?.itemNumber2] = 1;
+
+        itemInfosHtml += `${item.itemDescription ? `<li>${item.itemDescription}</li>` : ''}`;
+        usedItems[item.itemDescription] = 1;
         
         itemInfosHtml += `</ul>`;
-
         return itemInfosHtml;
     }
 
@@ -109,9 +104,21 @@ class PurchaseOrderHTML
     {
         const orderInfo = this.purchaseOrder.getPurchaseOrder();
         const orderLines = orderInfo.orderLines;
-        const itemInfosHtml = this.buildItemInfos();
 
         for (let i = 0; i < orderLines.length; i++) {
+
+          let currentLineIndex = i; 
+          while (i > 0 && orderInfo.itemInfos[currentLineIndex]["itemNumber"] == orderInfo.itemInfos[currentLineIndex - 1]["itemNumber"])
+          {
+            if (currentLineIndex == orderLines.length)
+            {
+              break;
+            }
+            currentLineIndex++;
+
+          }
+          
+          let itemInfosHtml = this.buildItemInfos(i);
 
             let html = `<div class="table-container">
     		<table>
@@ -295,6 +302,16 @@ ${this.orderAlert}
 </html>`;
 
     }    
+
+    async toPDF(): Promise<Buffer>
+    {
+        const browser = await puppeteer.launch();
+        const page = await browser.newPage();
+        await page.setContent(this.purchaseOrderHTML as string, { waitUntil: "networkidle0" });
+        const pdf = await page.pdf({ format: "A4", printBackground: true });
+        await browser.close();
+        return Buffer.from(pdf);
+    }
 }
 
 export default PurchaseOrderHTML;
