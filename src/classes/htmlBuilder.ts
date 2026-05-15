@@ -3,7 +3,8 @@ import PurchaseOrder from "./purchaseOrder";
 import OrderInfo from "../interfaces/orderInfo";
 import OrderType from "../enums/enums";
 import type {BodyInit} from "undici";
-import puppeteer from "puppeteer";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import ItemInfo from "../interfaces/itemInfo";
 
 class PurchaseOrderHTML
 {
@@ -78,7 +79,6 @@ class PurchaseOrderHTML
         const orderInfo = this.purchaseOrder.getPurchaseOrder();
         const itemInfos = orderInfo.itemInfos;
             
-        console.log("ITEM INFOS: " + JSON.stringify(itemInfos));
         const usedItems = {};
 
         let itemInfosHtml = `<ul>`;
@@ -303,15 +303,341 @@ ${this.orderAlert}
 
     }    
 
-    async toPDF(): Promise<Buffer>
-    {
-        const browser = await puppeteer.launch();
-        const page = await browser.newPage();
-        await page.setContent(this.purchaseOrderHTML as string, { waitUntil: "networkidle0" });
-        const pdf = await page.pdf({ format: "A4", printBackground: true });
-        await browser.close();
-        return Buffer.from(pdf);
+async toPDF(): Promise<Buffer> {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  // Letter page like typical HTML print (8.5x11 @ 72pt)
+  const PAGE_W = 612;
+  const PAGE_H = 792;
+
+  const margin = 40;
+  const contentW = PAGE_W - margin * 2;
+
+  let page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+  let y = PAGE_H - margin;
+
+  // ----- helpers -----
+  const newPage = () => {
+    page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+    y = PAGE_H - margin;
+  };
+
+  const ensureSpace = (needed: number) => {
+    if (y - needed < margin) newPage();
+  };
+
+  const sanitize = (s: any) => String(s ?? "").replace(/\r/g, "");
+
+  const extractDivLines = (html: any): string[] => {
+    const s = sanitize(html);
+    if (!s) return [];
+    // turn <br> into \n, capture <div> blocks, fall back to stripping tags
+    const brFixed = s.replace(/<br\s*\/?>/gi, "\n");
+    const divs = [...brFixed.matchAll(/<div[^>]*>(.*?)<\/div>/gi)].map(m =>
+      m[1]
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .trim()
+    ).filter(Boolean);
+
+    if (divs.length) return divs;
+
+    // fallback: strip tags and split on newlines
+    return brFixed
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .split("\n")
+      .map(x => x.trim())
+      .filter(Boolean);
+  };
+
+  const wrapText = (text: string, maxWidth: number, useBold = false, size = 9): string[] => {
+    const f = useBold ? boldFont : font;
+    const words = sanitize(text).split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+
+    const lines: string[] = [];
+    let line = words[0];
+
+    for (let i = 1; i < words.length; i++) {
+      const test = line + " " + words[i];
+      const w = f.widthOfTextAtSize(test, size);
+      if (w <= maxWidth) {
+        line = test;
+      } else {
+        lines.push(line);
+        line = words[i];
+      }
     }
+    lines.push(line);
+    return lines;
+  };
+
+  const drawText = (
+    text: string,
+    x: number,
+    yPos: number,
+    opts?: { bold?: boolean; size?: number; color?: ReturnType<typeof rgb> }
+  ) => {
+    const t = sanitize(text);
+    if (!t) return;
+    page.drawText(t, {
+      x,
+      y: yPos,
+      size: opts?.size ?? 9,
+      font: opts?.bold ? boldFont : font,
+      color: opts?.color ?? rgb(0, 0, 0),
+    });
+  };
+
+  const drawWrapped = (
+    text: string,
+    x: number,
+    maxWidth: number,
+    lineSize = 9,
+    lineGap = 2,
+    bold = false,
+    color = rgb(0, 0, 0)
+  ) => {
+    const lines = wrapText(text, maxWidth, bold, lineSize);
+    for (const ln of lines) {
+      ensureSpace(lineSize + lineGap + 2);
+      drawText(ln, x, y, { size: lineSize, bold, color });
+      y -= (lineSize + lineGap);
+    }
+  };
+
+  const drawHLine = (thickness = 1, c = rgb(0.8, 0.8, 0.8), pad = 10) => {
+    ensureSpace(pad + thickness + 2);
+    page.drawLine({
+      start: { x: margin, y },
+      end: { x: PAGE_W - margin, y },
+      thickness,
+      color: c,
+    });
+    y -= pad;
+  };
+
+  // ----- logo embed (from your HTML base64) -----
+  const logoBase64 = (this.purchaseOrderHTML as string).match(/data:image\/png;base64,([^"]+)/)?.[1] ?? "";
+  let logoImage: any = null;
+  try {
+    if (logoBase64) logoImage = await pdfDoc.embedPng(Buffer.from(logoBase64, "base64"));
+  } catch {
+    // ignore if logo is malformed
+  }
+
+  // ----- derived values -----
+  const orderInfo = this.orderInfo;
+  const orderLines = orderInfo.orderLines ?? [];
+  const itemInfos = orderInfo.itemInfos ?? [];
+
+  const isChange =
+    orderInfo.orderType === OrderType.CHANGE ||
+    orderInfo.orderType === OrderType.LEPRINO_CHANGE;
+
+  // ===== 1) HEADER (match HTML) =====
+  ensureSpace(80);
+
+  // header band (border-bottom only like HTML)
+  // logo
+  if (logoImage) {
+    page.drawImage(logoImage, { x: margin, y: y - 50, width: 55, height: 50 });
+  }
+
+  // Title
+  drawText("EDI Purchase Order", margin + 75, y - 20, { bold: true, size: 24 });
+
+  y -= 70;
+  // border bottom
+  page.drawLine({
+    start: { x: margin, y },
+    end: { x: PAGE_W - margin, y },
+    thickness: 2,
+    color: rgb(0.8, 0.8, 0.8),
+  });
+  y -= 16;
+
+  // ===== 2) ALERT (match HTML red box) =====
+  if (this.orderAlert) {
+    ensureSpace(40);
+    const alertH = 26;
+    page.drawRectangle({
+      x: margin,
+      y: y - alertH,
+      width: contentW,
+      height: alertH,
+      color: rgb(1, 0.90, 0.90),
+      borderColor: rgb(1, 0, 0),
+      borderWidth: 1,
+    });
+    drawText("*** POSSIBLE DUPLICATE PO# OR CHANGES TO EXISTING PO#, PLEASE CHECK ***", margin + 10, y - 18, {
+      bold: true,
+      size: 10,
+      color: rgb(0.85, 0, 0),
+    });
+    y -= (alertH + 18);
+  }
+
+  // ===== 3) “EDI Purchase Order Print” line =====
+  drawText("EDI Purchase Order Print", margin, y, { size: 10 });
+  y -= 18;
+
+  // ===== 4) Order info row =====
+  ensureSpace(20);
+  drawText(`Order Type: ${isChange ? "CHANGE ORDER" : "NEW ORDER"}`, margin, y, { size: 10, bold: true });
+  drawText(`PO Date: ${sanitize(orderInfo.poDate)}`, margin + 320, y, { size: 10 });
+  y -= 18;
+
+  // ===== 5) ShipTo / BillTo / Buyer blocks =====
+  drawHLine(1, rgb(0.85, 0.85, 0.85), 12);
+
+  const shipLines = extractDivLines(this.partiesHTML["ShipTo"]);
+  const billLines = extractDivLines(this.partiesHTML["BillTo"]);
+  const buyerLines = extractDivLines(this.partiesHTML["Buyer"] ?? "NO BUYER");
+
+  const leftX = margin;
+  const rightX = margin + contentW * 0.52; // like two columns
+  const colW = contentW * 0.46;
+
+  // Ship-To title
+  drawText("Ship-To", leftX, y, { bold: true, size: 10 });
+  drawText("Bill-To", rightX, y, { bold: true, size: 10 });
+  y -= 14;
+
+  // compute max lines to keep columns aligned
+  const maxAddrLines = Math.max(shipLines.length, billLines.length, 1);
+  for (let i = 0; i < maxAddrLines; i++) {
+    ensureSpace(12);
+    if (shipLines[i]) drawWrapped(shipLines[i], leftX, colW, 9, 1);
+    if (billLines[i]) drawWrapped(billLines[i], rightX, colW, 9, 1);
+    // drawWrapped adjusts y; we need row behavior not per-column shifts:
+    // So, instead do single-line draw to keep same y:
+    // (keeping best effort: if you want tighter alignment, I can refactor to strict grid)
+  }
+
+  // Buyer block on next line area (like your HTML)
+  y -= 6;
+  drawText("Buyer", rightX, y, { bold: true, size: 10 });
+  y -= 14;
+  for (const line of buyerLines.slice(0, 6)) {
+    ensureSpace(12);
+    drawWrapped(line, rightX, colW, 9, 1);
+  }
+  y -= 12;
+
+  // ===== 6) PO Number table =====
+  drawHLine(1, rgb(0.85, 0.85, 0.85), 12);
+
+  const tableBorder = rgb(0, 0, 0);
+  const headerFill = rgb(0.92, 0.92, 0.92);
+
+  const drawTableRow = (
+    cells: string[],
+    widths: number[],
+    isHeader = false,
+    rowH = 18
+  ) => {
+    ensureSpace(rowH + 6);
+    let x = margin;
+    for (let i = 0; i < cells.length; i++) {
+      page.drawRectangle({
+        x,
+        y: y - rowH,
+        width: widths[i],
+        height: rowH,
+        color: isHeader ? headerFill : rgb(1, 1, 1),
+        borderColor: tableBorder,
+        borderWidth: 1,
+      });
+      const cellText = sanitize(cells[i]);
+      // clip-ish: wrap within cell
+      const lines = wrapText(cellText, widths[i] - 8, isHeader, 8);
+      const first = lines[0] ?? "";
+      drawText(first, x + 4, y - rowH + 6, { size: 8, bold: isHeader });
+      x += widths[i];
+    }
+    y -= rowH;
+  };
+
+  // PO number block table
+  drawTableRow(["Customer PO Number / Release"], [contentW], true, 20);
+  drawTableRow([sanitize(orderInfo.poNumber)], [contentW], false, 20);
+  y -= 10;
+
+  // ===== 7) Order Lines tables =====
+  const colWidths = [
+    contentW * 0.08,
+    contentW * 0.22,
+    contentW * 0.17,
+    contentW * 0.15,
+    contentW * 0.15,
+    contentW * 0.23,
+  ];
+
+  const headerCells = ["Line", "Customer Part#", "QTY Ordered/UM", "Price/UM", "Amount", "Delivery Date"];
+
+  for (let i = 0; i < orderLines.length; i++) {
+    ensureSpace(80);
+
+    // header row
+    drawTableRow(headerCells, colWidths, true);
+
+    const line = orderLines[i] ?? {};
+    drawTableRow(
+      [
+        sanitize(line["lineNumber"]),
+        sanitize(line["customerPartNumber"]),
+        sanitize(line["qtyPerUOM"]),
+        sanitize(line["pricePerUOM"]),
+        sanitize(line["amount"]),
+        sanitize(line["deliveryDate"]),
+      ],
+      colWidths,
+      false
+    );
+    y -= 20;
+
+    // item info bullets (like your <ul>)
+    const item = itemInfos[i] ?? {} as ItemInfo;
+    const bulletW = contentW - 20;
+    const bulletX = margin + 14;
+
+    const bullets: string[] = [];
+    if (item.itemNumber) bullets.push(`Manufacturer Part: ${item.itemNumber}`);
+    if (item.itemNumber2) bullets.push(`Vendor Part: ${item.itemNumber2}`);
+    if (item.itemDescription) bullets.push(`${item.itemDescription}`);
+
+    for (const b of bullets) {
+      ensureSpace(14);
+      drawText("•", margin + 6, y, { size: 10 });
+      drawWrapped(b, bulletX, bulletW, 9, 2);
+      y -= 2;
+    }
+
+    y -= 8;
+  }
+
+  // ===== 8) Notes / Messages =====
+  const msgs = this.messagesHTML.map(m => extractDivLines(m)).flat();
+  if (msgs.length) {
+    drawHLine(1, rgb(0.85, 0.85, 0.85), 12);
+    drawText("Notes", margin, y, { bold: true, size: 10 });
+    y -= 16;
+
+    for (const m of msgs) {
+      ensureSpace(14);
+      drawText("•", margin + 6, y, { size: 10 });
+      drawWrapped(m, margin + 14, contentW - 20, 9, 2);
+      y -= 4;
+    }
+  }
+
+  const bytes = await pdfDoc.save();
+  return Buffer.from(bytes);
+}
 }
 
 export default PurchaseOrderHTML;

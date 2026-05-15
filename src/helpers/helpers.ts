@@ -68,7 +68,6 @@ function transformSubjectNameFrom(subjectName, orderType, poNumber, customerNumb
 
     subjectNameElementsSplitByDash[3] = `CUSTOMER# ${customerNumber}`;
 
-    console.log(JSON.stringify(subjectNameElementsSplitByDash))
     return subjectNameElementsSplitByDash.join(' - ');
 }
 

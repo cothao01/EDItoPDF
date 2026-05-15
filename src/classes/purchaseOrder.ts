@@ -21,6 +21,7 @@ class PurchaseOrder
     orderLines    : Array<LineInfo>;
     delimiter : string;
     orderLineLength : number;
+    globalSegmentIndex = 0;
 
     constructor(ediString)
     {
@@ -149,6 +150,8 @@ class PurchaseOrder
         for (let segment of ediSegments)
 	    {
 		    const segmentInfo = this.parseEDISegment(segment);
+            segmentInfo["index"] = this.globalSegmentIndex++;
+            console.log("Segment " + this.globalSegmentIndex + ": " + JSON.stringify(segmentInfo));
     		cleanedSegments.push(segmentInfo);
 	    }
 	
@@ -405,9 +408,11 @@ class PurchaseOrder
         for (let i = 0; i < this.notes.length; i++) 
         {
             const itemDescription = this.notes[i][segmentPositionPID];
-            let itemNumber = this.findSegment(this.segments, this.orderLineType)[0][segmentPositionPO];
-            let itemNumber2 = this.findSegment(this.segments, this.orderLineType)[0][segmentPositionPO2];
 
+            const itemNumberSegment = this.findSegment(this.segments, this.orderLineType)[0];
+
+            let itemNumber = itemNumberSegment[segmentPositionPO];
+            let itemNumber2 = itemNumberSegment[segmentPositionPO2];
             const itemInfo = this.createItemInfo(itemNumber, itemNumber2, itemDescription);
 
             stagedItemInfos.push(itemInfo); 
@@ -429,9 +434,9 @@ class PurchaseOrder
         return stagedItemInfos;
     }
 
-    createItemInfo(itemNumber, itemNumber2, itemDescription) : ItemInfo
+    createItemInfo(itemNumber, itemNumber2, itemDescription, index = null) : ItemInfo
     {
-        return {itemNumber: itemNumber, itemNumber2: itemNumber2, itemDescription: itemDescription} as ItemInfo;
+        return {itemNumber: itemNumber, itemNumber2: itemNumber2, itemDescription: itemDescription, index: index} as ItemInfo;
     }
 
     getOrderLines() : Array<LineInfo>

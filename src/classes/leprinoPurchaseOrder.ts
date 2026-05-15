@@ -55,11 +55,12 @@ class LeprinoPurchaseOrder extends PurchaseOrder
         for (let i = 0; i < this.notes.length; i++) 
         {
             const itemDescription = this.notes[i][segmentPositionPID];
-            let itemNumber = this.findSegment(this.segments, this.orderLineType)[0][segmentPositionPO];
-            let itemNumber2 = this.findSegment(this.segments, this.orderLineType)[0][segmentPositionPO2];
+            const itemNumberSegment = this.findSegment(this.segments, this.orderLineType)[0];
+            const indexDiff = Math.abs(this.notes[i]["index"] - itemNumberSegment["index"]);
+            let itemNumber = itemNumberSegment[segmentPositionPO];
+            let itemNumber2 = itemNumberSegment[segmentPositionPO2];
 
-            const itemInfo = this.createItemInfo(itemNumber, itemNumber2, itemDescription);
-
+            const itemInfo = this.createItemInfo(itemNumber, itemNumber2, null, itemNumberSegment["index"]);
             stagedItemInfos.push(itemInfo); 
         }
 
@@ -67,7 +68,7 @@ class LeprinoPurchaseOrder extends PurchaseOrder
         {
             const itemNumber = this.findSegment(this.segments, this.orderLineType)[j][segmentPositionPO];
             const itemNumber2 = this.findSegment(this.segments, this.orderLineType)[j][segmentPositionPO2];
-            const itemInfo = this.createItemInfo(itemNumber, itemNumber2, null);
+            const itemInfo = this.createItemInfo(itemNumber, itemNumber2, null, this.findSegment(this.segments, this.orderLineType)[j]["index"]);
             stagedItemInfos.push(itemInfo);
         }
 
@@ -75,7 +76,7 @@ class LeprinoPurchaseOrder extends PurchaseOrder
         {
             const currentItem = stagedItemInfos[i];
             const prevItem = cleanedItemInfos[cleanedItemInfos.length - 1];
-            
+          
             // If this is a duplicate item number
             if (prevItem && currentItem.itemNumber === prevItem.itemNumber) {
                 // If current has description, save it for next unique item
@@ -94,6 +95,30 @@ class LeprinoPurchaseOrder extends PurchaseOrder
             }
             
             cleanedItemInfos.push(currentItem);
+        }
+
+        for (let i = 0; i < this.notes.length; i++)
+        {
+            let closestIndex = Number.MAX_SAFE_INTEGER;
+            let closestItemInfo;
+            let noteIndex = this.notes[i]["index"];
+            for (let j = 0; j < cleanedItemInfos.length; j++)
+            {
+                let itemIndex = cleanedItemInfos[j]["index"];
+                let indexDiff = Math.abs(noteIndex - itemIndex);
+                
+                // if its comparing an item that is below it, continue as this means that item is invalid
+                if (indexDiff < 0) continue;
+
+                console.log(itemIndex.toString() + " - "  + noteIndex.toString() + " = " + indexDiff);
+                if (indexDiff < closestIndex)
+                {
+                    closestIndex = indexDiff;
+                    closestItemInfo = cleanedItemInfos[j];
+                }
+
+            }
+            closestItemInfo["itemDescription"] = this.notes[i][segmentPositionPID];
         }
 
         return cleanedItemInfos;
