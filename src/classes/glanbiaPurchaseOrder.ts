@@ -10,8 +10,20 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
 {
     getSegments() : Array<{}>
     {
+        const MINIMUM_EDI_SEGMENTS = 10;
 
         let ediSegments = this.ediString.split('~');
+        if (ediSegments.length < MINIMUM_EDI_SEGMENTS)
+        {
+            ediSegments = this.ediString.split('\r\n');
+        }
+
+        if (ediSegments.length < MINIMUM_EDI_SEGMENTS)
+        {
+            ediSegments = this.ediString.split('\n');
+        }
+
+
         
         let cleanedSegments = this.getCleanedEDISegmentsFrom(ediSegments);
         if (Object.keys(cleanedSegments[0])[0] == "undefined00")
@@ -67,6 +79,16 @@ class GlanbiaPurchaseOrder extends PurchaseOrder
     mapItemInfos() : void
     {    
            this.itemInfos = this.createItemInfos("PO107", "PID05"); 
+    }
+
+    getRequiredDeliveryDate() : String
+    {
+        const dtmSegments = this.findSegment(this.segments, "DTM");
+        /*if (!dtmSegments || dtmSegments.length === 0 || !dtmSegments[0]["DTM02"])
+        {
+            return "No delivery date received";
+        }*/
+        return dtmSegments[0]["DTM02"];
     }
 
     // Glanbia has too many redundant messages, best to leave them out

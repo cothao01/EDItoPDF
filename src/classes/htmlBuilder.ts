@@ -20,11 +20,16 @@ class PurchaseOrderHTML
     {
         this.purchaseOrder = poFactory.createPurchaseOrder();   
         this.orderInfo = this.purchaseOrder.getPurchaseOrder(); 
+        console.log("Building Order Lines...\n");
         this.buildOrderLines();
+        console.log("Building Parties...\n");
         this.buildParties();
+        console.log("Building Messages...\n");
         this.buildMessages();
+        console.log("Building alert...\n");
         this.buildOrderAlert();
 
+        console.log("Buildilng PO...\n");
         this.buildPurchaseOrder();
     }
 
@@ -86,7 +91,7 @@ class PurchaseOrderHTML
         let item = itemInfos[lineNumber];
 
         console.log("CURRENT ITEM: " + JSON.stringify(item));
-
+        
         itemInfosHtml += `${item.itemNumber ? `<li>Manufacturer Part: ${item.itemNumber}</li>` : ''}`;
         usedItems[item.itemNumber] = 1;
 
@@ -105,7 +110,7 @@ class PurchaseOrderHTML
         const orderInfo = this.purchaseOrder.getPurchaseOrder();
         const orderLines = orderInfo.orderLines;
 
-        for (let i = 0; i < orderLines.length; i++) {
+        for (let i = 0; i < orderLines.length - 1; i++) {
 
           let currentLineIndex = i; 
           while (i > 0 && orderInfo.itemInfos[currentLineIndex]["itemNumber"] == orderInfo.itemInfos[currentLineIndex - 1]["itemNumber"])
@@ -144,7 +149,6 @@ class PurchaseOrderHTML
     	    `;
     		this.orderLineHTML.push(html);
 		}
-
     }
 
     buildPurchaseOrder() : void
