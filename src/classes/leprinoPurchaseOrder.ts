@@ -31,7 +31,8 @@ class LeprinoPurchaseOrder extends PurchaseOrder
                 poNumber = this.findSegment(this.segments, "BCH")[0]["BCH03"];
                 break;
             case OrderType.NEW:
-                poNumber = this.findSegment(this.segments, "BEG")[0]["BEG03"];
+                const begSegmentsLeprino = this.findSegment(this.segments, "BEG");
+                poNumber = begSegmentsLeprino.length > 0 ? begSegmentsLeprino[0]["BEG03"] : null;
                 break;
             default:
                 poNumber = null;            
