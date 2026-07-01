@@ -182,7 +182,8 @@ class PurchaseOrder
     getPONumber() : Number
     {
         console.log("Right before the incident...");
-        let poNumber = this.findSegment(this.segments, "BEG")[0]["BEG03"];
+        const begSegments = this.findSegment(this.segments, "BEG");
+        let poNumber = begSegments.length > 0 ? begSegments[0]["BEG03"] : null;
         return poNumber; 
     }
 
